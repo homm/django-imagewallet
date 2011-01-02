@@ -5,7 +5,7 @@ from django.db.models.fields.files import ImageField, ImageFieldFile
 from django.db.models import signals
 from django.core.files import File
 from django.utils.encoding import force_unicode
-from imagewallet import Wallet, Filter, ORIGINAL_SIZE_NAME
+from imagewallet import Wallet, Filter, ORIGINAL_FORMAT
 from imagewallet.forms import WalletFileField
 
 from os import path as os_path
@@ -35,7 +35,7 @@ class WalletDescriptor(object):
                     'size': '%(size)s', 'extension': '%(extension)s'}
             pattern = os_path.join(field.upload_to, field.pattern % vars)
         
-        value = field.attr_class(field.sizes, pattern, original_format, field.storage)
+        value = field.attr_class(field.formats, pattern, original_format, field.storage)
         
         obj.__dict__[field.name] = value
         
@@ -60,7 +60,7 @@ class WalletField(Field):
     attr_class = Wallet
     descriptor_class = WalletDescriptor
     
-    def __init__(self, sizes={}, verbose_name=None, name=None,
+    def __init__(self, formats={}, verbose_name=None, name=None,
                  upload_to='', storage=None, generate_on_save=False,
                  max_width=None, max_height=None, max_square=None,
                  pattern=None, **kwargs):
@@ -72,15 +72,19 @@ class WalletField(Field):
         self.storage = storage
         self.generate_on_save = generate_on_save
         
-        self.sizes = {ORIGINAL_SIZE_NAME: (Filter('quality', 95),)}
-        self.sizes.update(sizes)
+        self.formats = {
+            ORIGINAL_FORMAT: (
+                Filter('quality', 95),
+            ),
+        }
+        self.formats.update(formats)
         self.max_width = max_width
         self.max_height = max_height
         self.max_square = max_square
         self.pattern = pattern or "%(hash1)s/%(hash2)s%(hash3)s_%(size)s.%(extension)s"
         kwargs['max_length'] = kwargs.get('max_length', 255) 
         
-        Wallet.populate_sizes(self.sizes.keys())
+        Wallet.populate_formats(self.formats.keys())
         
         return super(WalletField, self).__init__(verbose_name, name, **kwargs)
     

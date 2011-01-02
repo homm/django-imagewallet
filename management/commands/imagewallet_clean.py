@@ -2,14 +2,13 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db.models.loading import get_app, get_models, get_model
 from django.db.models import Q
 
-from imagewallet import ORIGINAL_SIZE_NAME
 from imagewallet.fields import WalletField, WalletDescriptor
 
 class Command(BaseCommand):
-    args = '[app [model [field [size]]]]'
+    args = '[app [model [field [firmat]]]]'
     help = 'Delete thumbs to save space.'
     
-    def handle(self, app_label="", model_label="", field_label="", size_label="", *args, **options):
+    def handle(self, app_label="", model_label="", field_label="", format_label="", *args, **options):
         if app_label:
             try:
                 app = get_app(app_label, emptyOK=True)
@@ -48,8 +47,8 @@ class Command(BaseCommand):
             if len(fields) == 0:
                 raise CommandError('no wallet fields found')        
         
-        if not (app_label and model_label and field_label and size_label):
-            size_label = None
+        if not (app_label and model_label and field_label and format_label):
+            format_label = None
         
         deleted = 0
         for field in fields:
@@ -62,9 +61,9 @@ class Command(BaseCommand):
                 for item in items:
                     setattr(object_item, field.name, item.get(field.name))
                     wallet = getattr(object_item, field.name)
-                    deleted += wallet.clean(size_label)
+                    deleted += wallet.clean(format_label)
             except AttributeError:
-                raise CommandError('size "%s" not found' % size_label)
+                raise CommandError('format "%s" not found' % format_label)
 
         print "Deleted %s images from %s fields." % (deleted, len(fields)) 
         print "Done." 
