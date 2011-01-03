@@ -16,9 +16,6 @@ class WalletDescriptor(object):
         self.field = field
     
     def __get__(self, obj=None, type=None):
-        if obj is None:
-            raise AttributeError('Can only be accessed via an instance.')
-        
         value = obj.__dict__[self.field.name]
         
         if isinstance(value, Wallet):
