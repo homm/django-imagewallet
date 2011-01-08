@@ -29,31 +29,37 @@ class Wallet(object):
     # Original Image, stored after saving or loaded from disk
     _loaded_original = False
     
-    def __init__(self, formats, pattern, original_image_type=False, storage=None):
+    def __init__(self, formats, pattern=None, original_image_type=False, storage=None):
         """
         Pattern is a string with 2 replaces: "size" and "extension".
         original_image_type is type of saved original image.
         """
-        
-        if not ('%(size)' in pattern and '%(extension)' in pattern):
-            raise IncorrectLoaded('Pattern string must be string with %%(size) and %%(extension) replaces. Given pattern: %s' % pattern)
-        
         self.formats = formats
         self._pattern = pattern
         self.original_image_type = original_image_type
         self.storage = storage or default_storage
-    
-    @property
-    def pattern(self):
-        if callable(self._pattern):
-            self._pattern = self._pattern()
-        return self._pattern
+        
+        if not original_image_type is False and not pattern:
+            raise ValueError('For saved files pattern is required')
+            
+        if pattern and not '%(size)s' in pattern:
+            raise ValueError('Pattern string should contain %%(size)s replace. Given pattern: %s' % pattern)
     
     def __unicode__(self):
         if self:
-            return u'%s;%s' % (self.pattern, self.original_image_type)
+            return u'%s;%s' % (self._pattern, self.original_image_type)
         else:
             return u''
+    
+    def get_pattern(self):
+        return self._pattern
+    
+    def set_pattern(self, value):
+        if self:
+            raise ValueError("Can not change pattern for saved wallet. Delete first.")
+        self._pattern = value
+    
+    pattern = property(get_pattern, set_pattern)
     
     def __nonzero__(self):
         """
@@ -72,21 +78,37 @@ class Wallet(object):
         for format in formats:
             url_name = 'url_%s' % format
             if not hasattr(cls, url_name):
-                setattr(cls, url_name, curry(cls.get_url, format=format))
+                setattr(cls, url_name, property(curry(cls.get_url, format=format)))
             path_name = 'path_%s' % format
             if not hasattr(cls, path_name):
-                setattr(cls, path_name, curry(cls.get_path, format=format))
+                setattr(cls, path_name, property(curry(cls.get_path, format=format)))
             size_name = 'size_%s' % format
             if not hasattr(cls, size_name):
-                setattr(cls, size_name, curry(cls.get_size, format=format))
+                setattr(cls, size_name, property(curry(cls.get_size, format=format)))
+    
+    def load_original(self):
+        if not self:
+            return None
+        if not self._loaded_original:
+            image = self.storage.open(self.get_path(ORIGINAL_FORMAT))
+            self._loaded_original = Image.open(image)
+        return self._loaded_original
  
-    def save(self, image, image_type=None, generate=False):
+    def save(self, image, process_all_formats=False):
         """
         Loads new image to wallet.
-        image may be path to file, file object, django object or pil image
-        generate may be True, False, or None
+        image may be path to file, django file or pil image
         Returns original image.
         """
+        if self:
+            raise ValueError("Can not save another images in saved wallet. Delete first.")
+        
+        if not self._pattern:
+            raise ValueError("Pattern should be present.")
+        
+        if not '%(size)s' in self._pattern:
+            raise ValueError('Pattern string should contain %%(size)s replace. Given pattern: %s' % pattern)
+        
         if isinstance(image, basestring):
             image = self.storage.open(image)
             image = Image.open(image)
@@ -97,20 +119,14 @@ class Wallet(object):
         else:
             raise ValueError("Argument of this type is not supported.")
         
-        self.delete()
-        
         self._loaded_original = image
         
-        # Get image type from image, or from parameters 
-        if image_type is None:
-            image_type = self._loaded_original.format
-        
-        self.original_image_type = self.get_image_type(ORIGINAL_FORMAT, image_type)
+        self.original_image_type = self.get_image_type(ORIGINAL_FORMAT, self._loaded_original.format)
         
         # process original image
         self._loaded_original = self.process_image(ORIGINAL_FORMAT, save=True)
         
-        if generate:
+        if process_all_formats:
             for format in self.formats:
                 if format != ORIGINAL_FORMAT:
                     self.process_image(format, save=True)
@@ -134,6 +150,8 @@ class Wallet(object):
         if save:
             save_params = image.info
             
+            # Save empty file to ensure path is exists
+            self.storage.save(self.get_path(format), ContentFile(''))
             file = self.storage.open(self.get_path(format), mode='wb')
             try:
                 image_type = self.get_image_type(format)
@@ -152,23 +170,19 @@ class Wallet(object):
         
         return image
     
-    def get_size(self, format, image=None):
-        " TODO: cache this"
-        path = self.get_path(format)
-        if format != ORIGINAL_FORMAT and not self.storage.exists(path):
-            image = self.process_image(format, save=True)
-            return image.size
-        else:
-            return get_image_dimensions(self.storage.open(path))
-    
-    def load_original(self):
-        if not self:
-            return None
-        if not self._loaded_original:
-            image = self.storage.open(self.get_path(ORIGINAL_FORMAT))
-            self._loaded_original = Image.open(image)
-        return self._loaded_original
-    
+    def copy(self, wallet):
+        """
+        Copy image from other wallet to this without changing. Filters for original format ignored.
+        """
+        if self:
+            raise ValueError("Can not save another images in saved wallet. Delete first.")
+        if not wallet:
+            return
+        self.original_image_type = wallet.original_image_type
+        _from = wallet.get_path(ORIGINAL_FORMAT)
+        _to = self.get_path(ORIGINAL_FORMAT)
+        self.storage.save(_to, wallet.storage.open(_from))
+        
     def delete(self):
         """
         Mark wallet as not saved and delete all files
@@ -183,13 +197,22 @@ class Wallet(object):
     
     def clean(self, format):
         """
-        Delete not-original images from disk.
+        Delete not-original images from disk. Safe for original image.
         """
         if not self or format == ORIGINAL_FORMAT:
             # Use delete() instead.
             return
         path = self.get_path(format)
         self.storage.delete(path)
+    
+    def get_size(self, format, image=None):
+        " TODO: cache this"
+        path = self.get_path(format)
+        if format != ORIGINAL_FORMAT and not self.storage.exists(path):
+            image = self.process_image(format, save=True)
+            return image.size
+        else:
+            return get_image_dimensions(self.storage.open(path))
     
     def get_url(self, format):
         # url returns only for existing images
@@ -210,11 +233,11 @@ class Wallet(object):
         if not format in self.formats:
             raise AttributeError("%s has no format %s" % (self.__class__.__name__, format))
         
-        # for regular format returns custom image type
+        # for not original format returns user-defined type
         if format != ORIGINAL_FORMAT and isinstance(self.formats[format][-1], basestring):
             return self.formats[format][-1]
         
-        # next is original format. Return original_image_type, if already saved
+        # for saved wallets return original image type
         if not self.original_image_type is False:
             return self.original_image_type
         
@@ -222,10 +245,10 @@ class Wallet(object):
         if isinstance(self.formats[ORIGINAL_FORMAT][-1], basestring):
             return self.formats[ORIGINAL_FORMAT][-1]
         
-        if original_image_type:
+        if original_image_type and original_image_type in self.image_types_extensions:
             return original_image_type
         
-        # else fall back
+        # for unsupported types it will be png
         return self.image_type_fallback
 
 

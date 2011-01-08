@@ -96,7 +96,7 @@ class Resize(object):
     
     def _parse_params(self, size, method, enlarge, strict_size):
         if isinstance(size, basestring) and len(re.split(u'[×x*]', size)) == 2:
-            size = re.split(u'[×x*]', size)
+            size = re.split(u'[×x*]', size, maxsplit=1)
         elif isinstance(size, (tuple, list)) and len(size) == 2:
             pass
         else:
@@ -109,6 +109,8 @@ class Resize(object):
             size[0] = 0
         if size[1] in (None, '', '?'):
             size[1] = 0
+        
+        size = map(int, size)
         
         if method in self.METHOD_FUNCTIONS:
             method = getattr(self, self.METHOD_FUNCTIONS[method])
