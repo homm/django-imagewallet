@@ -75,6 +75,7 @@ class Wallet(object):
     
     @classmethod
     def populate_formats(cls, formats):
+        cls = Wallet
         for format in formats:
             url_name = 'url_%s' % format
             if not hasattr(cls, url_name):
