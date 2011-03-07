@@ -208,6 +208,8 @@ class Wallet(object):
     
     def get_size(self, format, image=None):
         " TODO: cache this"
+        if not self:
+            return (None, None)
         path = self.get_path(format)
         if format != ORIGINAL_FORMAT and not self.storage.exists(path):
             image = self.process_image(format, save=True)

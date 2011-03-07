@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db.models.loading import get_app, get_models, get_model
 from django.db.models import Q
 
+from imagewallet import ORIGINAL_FORMAT
 from imagewallet.fields import WalletField, WalletDescriptor
 
 class Command(BaseCommand):
@@ -61,7 +62,14 @@ class Command(BaseCommand):
                 for item in items:
                     setattr(object_item, field.name, item.get(field.name))
                     wallet = getattr(object_item, field.name)
-                    deleted += wallet.clean(format_label)
+                    if format_label:
+                        wallet.clean(format_label)
+                        deleted += 1
+                    else:
+                        for format in wallet.formats:
+                            if format != ORIGINAL_FORMAT:
+                                wallet.clean(format)
+                                deleted += 1
             except AttributeError:
                 raise CommandError('format "%s" not found' % format_label)
 
