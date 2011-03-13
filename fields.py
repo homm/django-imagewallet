@@ -121,11 +121,6 @@ class WalletField(FileField):
                 return None
             return value
         return unicode(value)
-
-    def delete_file(self, instance, sender, **kwargs):
-        # connected to post_delete signal
-        wallet = getattr(instance, self.name)
-        wallet.delete(save=False)
     
     def get_directory_name(self, instance):
         upload_to = smart_str(self.upload_to)
