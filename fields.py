@@ -155,3 +155,63 @@ class WalletField(FileField):
         args, kwargs = introspector(self)
         # That's our definition!
         return (field_class, args, kwargs)
+
+
+
+class SmartWalletObject(object):
+    def __init__(self, instance, field):
+        self.instance = instance
+        self.field = field
+    
+    def __getattr__(self, name):
+        if name.startswith('size_'):
+            return self.get_size(name[5:])
+        if name.startswith('url_'):
+            return self.get_url(name[4:])
+        if name.startswith('path_'):
+            return self.get_path(name[5:])
+        raise ValueError()
+    
+    def get_size(self, format):
+        wallet = self.any(format)
+        if wallet:
+            return wallet.get_size(format)
+    
+    def get_url(self, format):
+        wallet = self.any(format)
+        if wallet:
+            return wallet.get_url(format)
+    
+    def get_path(self, format):
+        wallet = self.any(format)
+        if wallet:
+            return wallet.get_path(format)
+    
+    def any(self, format=None):
+        posibles = self.field.specials.get(format, self.field.regular)
+        for posible in posibles:
+            if format in posible.formats:
+                val = getattr(self.instance, posible.name)
+                if val:
+                    return val
+        return False
+
+class SmartWalletField(object):
+    def __init__(self, *args):
+        super(SmartWalletField, self).__init__()
+        self.regular = list(args)
+        self.specials = {}
+    
+    def set_special_order(self, formats, *fields):
+        else_fields = self.regular[:]
+        for field in fields:
+            if field in else_fields:
+                 else_fields.remove(field)
+        if not isinstance(formats, (list, tuple)):
+            formats = [formats]
+        for format in formats:
+            self.specials[format] = list(fields) + else_fields
+        return self
+
+    def __get__(self, instance=None, owner=None):
+        return SmartWalletObject(instance, self)
