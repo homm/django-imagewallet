@@ -172,6 +172,9 @@ class SmartWalletObject(object):
             return self.get_path(name[5:])
         raise ValueError()
     
+    def __nonzero__(self):
+        return bool(self.any())
+    
     def get_size(self, format):
         wallet = self.any(format)
         if wallet:
@@ -190,7 +193,7 @@ class SmartWalletObject(object):
     def any(self, format=None):
         posibles = self.field.specials.get(format, self.field.regular)
         for posible in posibles:
-            if format in posible.formats:
+            if format is None or format in posible.formats:
                 val = getattr(self.instance, posible.name)
                 if val:
                     return val
