@@ -229,8 +229,10 @@ class Wallet(object):
             return None
     
     def get_path(self, format):
+        if not self._pattern:
+            return None
         extension = self.image_types_extensions[self.get_image_type(format)]
-        return self.pattern % {'size': format, 'extension': extension}
+        return self._pattern % {'size': format, 'extension': extension}
     
     def get_image_type(self, format, original_image_type=None):
         if not format in self.formats:
