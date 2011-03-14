@@ -114,13 +114,11 @@ class WalletField(FileField):
     def get_prep_value(self, value):
         if value is None:
             return None
-        if isinstance(value, self.attr_class):
-            value = unicode(value)
-            if not value and self.null:
-                # auto-convert empty wallets to null for null fields
-                return None
-            return value
-        return unicode(value)
+        value = unicode(value)
+        if not value and self.null:
+            # auto-convert empty wallets to null for null fields
+            return None
+        return value
     
     def get_directory_name(self, instance):
         upload_to = smart_str(self.upload_to)
