@@ -144,6 +144,11 @@ class WalletField(FileField):
             if not any((self.storage.exists(candidate) for candidate in candidates)):
                 break
         return file
+    
+    def delete_file(self, instance, sender, **kwargs):
+        # connected to post_delete signal
+        # do nothing
+        pass
         
     def south_field_triple(self):
         "Returns a suitable description of this field for South."
