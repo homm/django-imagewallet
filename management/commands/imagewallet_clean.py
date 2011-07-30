@@ -3,7 +3,7 @@ from django.db.models.loading import get_app, get_models, get_model
 from django.db.models import Q
 
 from imagewallet import ORIGINAL_FORMAT
-from imagewallet.fields import WalletField, WalletDescriptor
+from imagewallet.fields import WalletField
 
 class Command(BaseCommand):
     args = '[app [model [field [firmat]]]]'

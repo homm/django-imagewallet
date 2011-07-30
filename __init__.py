@@ -13,7 +13,7 @@ from PIL import Image
 
 from os import path as os_path
 
-import ImageFile
+from PIL import ImageFile
 ImageFile.MAXBLOCK = 1000000 # fix problem with large images and optimized files
 
 ORIGINAL_FORMAT = 'original'
@@ -108,7 +108,7 @@ class Wallet(object):
             raise ValueError("Pattern should be present.")
         
         if not '%(size)s' in self._pattern:
-            raise ValueError('Pattern string should contain %%(size)s replace. Given pattern: %s' % pattern)
+            raise ValueError('Pattern string should contain %%(size)s replace. Given pattern: %s' % self._pattern)
         
         if isinstance(image, basestring):
             image = self.storage.open(image)

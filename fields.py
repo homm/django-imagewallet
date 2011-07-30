@@ -3,6 +3,7 @@
 from django.db.models.fields.files import FileField
 from django.core.files import File
 from django.utils.encoding import force_unicode, smart_str
+
 from imagewallet import Wallet, Filter, ORIGINAL_FORMAT
 from imagewallet.forms import WalletFileField
 
@@ -63,7 +64,8 @@ class WalletDescriptor(object):
             wallet.save(value.name, value, save=False)
             instance.__dict__[field.name] = wallet
         # copy image from foreign wallets
-        elif isinstance(value, Wallet) and (not isinstance(value, field.attr_class) or value.instance != instance or value.field != field):
+        elif isinstance(value, Wallet) and (not isinstance(value, field.attr_class) 
+                                            or value.instance != instance or value.field != field):
             wallet = self.field.attr_class(instance, self.field)
             wallet.copy(value)
             instance.__dict__[field.name] = wallet
@@ -140,7 +142,8 @@ class WalletField(FileField):
         while True:
             file = os.path.join(dir, self.get_filename(filename))
             # it is stupid, to check all extensions, but I can't think anything better
-            candidates = [file % {'size': ORIGINAL_FORMAT, 'extension': extension} for extension in self.attr_class.image_types_extensions.values()]
+            candidates = [file % {'size': ORIGINAL_FORMAT, 'extension': extension} 
+                          for extension in self.attr_class.image_types_extensions.values()]
             if not any((self.storage.exists(candidate) for candidate in candidates)):
                 break
         return file
@@ -212,7 +215,7 @@ class SmartWalletField(object):
         else_fields = self.regular[:]
         for field in fields:
             if field in else_fields:
-                 else_fields.remove(field)
+                else_fields.remove(field)
         if not isinstance(formats, (list, tuple)):
             formats = [formats]
         for format in formats:
