@@ -18,4 +18,4 @@ def paste_composite(original, paste):
 
     original.paste(paste, (0, 0), blending_chanel)
     original.putalpha(alpha_chanel)
-    del image_alpha, alpha_chanel, image_alpha
+    del image_alpha, alpha_chanel, blending_chanel
