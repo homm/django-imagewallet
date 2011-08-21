@@ -1,47 +1,21 @@
 # -*- coding: utf-8 -*-
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageMath
 
 PALETTE_MODES = ('P',)
 
-def alpha_composite(image, background):
-    
-    image.load()
-    background.load()
-    
-    # mask for image
-    alpha = image.split()[-1]
-    
-    # mask from background
-    background_alpha = background.split()[-1]
-    
-    alpha_data = alpha.getdata()
-    background_alpha_data = background_alpha.getdata()
-    
-    new_blending = list(alpha.getdata())
-    new_alpha = list(background_alpha.getdata())
-    
-    for i in xrange(len(alpha_data)):
-        alpha_pixel = new_blending[i]
-        background_alpha_pixel = new_alpha[i]
-        if alpha_pixel == 0:
-            new_blending[i] = 0
-            #new_alpha[i] = background_alpha_pixel
-        elif alpha_pixel == 255:
-            new_alpha[i] = 255
-            new_blending[i] = 255
-        else:
-            new_alpha[i] = alpha_pixel + (255 - alpha_pixel) * background_alpha_pixel / 255
-            new_blending[i] = alpha_pixel * 255 / new_alpha[i]
-    
-    del alpha_data
-    del background_alpha_data
-    
-    alpha.putdata(new_alpha)
-    background_alpha.putdata(new_blending)
-    
-    background.paste(image, (0, 0), background_alpha)
-    
-    background.putalpha(alpha)
-    
-    return background
+def paste_composite(original, paste):
+    original.load()
+    paste.load()
+
+    image_alpha = paste.split()[-1]
+
+    alpha_chanel = original.split()[-1]
+    alpha_chanel.paste(Image.new('L', alpha_chanel.size, 255), image_alpha)
+
+    blending_chanel = ImageMath.eval("convert(a * 255 / b, 'L')", 
+        a=image_alpha, b=alpha_chanel)
+
+    original.paste(paste, (0, 0), blending_chanel)
+    original.putalpha(alpha_chanel)
+    del image_alpha, alpha_chanel, image_alpha

@@ -6,7 +6,7 @@ from PIL.ImageColor import getrgb
 from PIL.ImageFilter import BLUR, CONTOUR, DETAIL, EDGE_ENHANCE, EDGE_ENHANCE_MORE, EMBOSS
 from PIL.ImageFilter import FIND_EDGES, SMOOTH, SMOOTH_MORE, SHARPEN
 
-from imagewallet.image import alpha_composite, PALETTE_MODES
+from imagewallet.image import paste_composite, PALETTE_MODES
 
 
 " Size method. Result image will be not more then given size"
@@ -214,7 +214,7 @@ def background(image, color):
             if image.mode in ('RGBA', 'LA'):
                 if isinstance(color, tuple) and len(color) == 4:
                     # semitransparent background
-                    bg = alpha_composite(image, bg)
+                    paste_composite(bg, image)
                 else:
                     # solid background
                     bg = bg.convert(image.mode[:-1])
