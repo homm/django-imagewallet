@@ -1,0 +1,25 @@
+"""
+This implementation have set of things I would like to fix.
+
+First of all I would like store match more information abobut images. It is possible only with database storage. It is to slow to open each image for findout it size or format.
+
+Next, I would like store "bad" images. When user upload image, he may not know anything about formats. For user Micrisoft Word document is valid image.
+
+In future filter of one image shoud have access to other images of this object. And to related objects too.
+
+Next, should no more checking file exist.
+
+Format may be like this.
+info = ('thumbs/dishes/photo_2011/o/gebo6qvz7pw1_%(size)s.%(extension)s', 
+    {
+        'original': (1024, 768, 'JPEG'), 
+        'index': (150, 70, 'GIF'),
+        'full': (160, 200, 'JPEG'),
+        'list': (120, 100, 'JPEG'),
+        'actions': (60, 30, 'JPEG')
+    })
+
+Marshal serializer looks greate. It perform 400k loads in second. Clean os.path.exists perform about 177k operation in second, but should be called for every format, require additional extension computing and much more expensive in Django's storage wrapper.
+
+
+"""
