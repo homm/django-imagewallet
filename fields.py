@@ -207,6 +207,29 @@ class SmartWalletObject(object):
                     return val
         return False
 
+"""
+Use this field when you have several wallet fields and don't know which user
+will be fill.
+
+For example:
+    PHOTO_SIZES = {
+        'in_list': (
+            Filter('resize', size=(155, 125), strict_size=True),
+        ),
+        'in_cart': (
+            Filter('resize', size=(52, 50), strict_size=True),
+        ),
+        'full': (
+            Filter('resize', size=(300, 300), method='median'),
+            Filter('progressive'),
+            'JPEG',
+        ),
+    }
+    small_photo = WalletField(formats=PHOTO_SIZES, upload_to='dishes/photo_%Y/%r', null=True, blank=True)
+    big_photo = WalletField(formats=PHOTO_SIZES, upload_to='dishes/photo_%Y/%r', null=True, blank=True)
+    smart_photo = SmartWalletField(photo, big_photo).set_special_order('full', big_photo, photo)
+
+"""
 class SmartWalletField(object):
     def __init__(self, *args):
         super(SmartWalletField, self).__init__()
