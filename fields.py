@@ -21,7 +21,9 @@ class FieldWallet(Wallet):
     def save(self, name, image, save=False):
         self.delete(save=False)
         self.pattern = self.field.generate_filename(self.instance, name)
-        super(FieldWallet, self).save(image, self.field.process_all_formats)
+        super(FieldWallet, self).save(image)
+        if self.field.process_all_formats:
+            self.process_all_formats()
         if save:
             self.instance.save()
     save.alters_data = True
@@ -110,7 +112,7 @@ class WalletField(FileField):
             # instance.__dict__ may contain string and null if no one access
             # to field since object loading from database
             return value
-        # in other cases in can be anything
+        # in other cases it can be anything
         return getattr(model_instance, self.attname)
     
     def get_prep_value(self, value):

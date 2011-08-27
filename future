@@ -21,5 +21,5 @@ info = ('thumbs/dishes/photo_2011/o/gebo6qvz7pw1_%(size)s.%(extension)s',
 
 Marshal serializer looks greate. It perform 400k loads in second. Clean os.path.exists perform about 177k operation in second, but should be called for every format, require additional extension computing and much more expensive in Django's storage wrapper.
 
-
+Image format for wallet format should be stored elsewhere then last line.
 """

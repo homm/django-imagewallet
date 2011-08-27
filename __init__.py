@@ -9,14 +9,12 @@ from django.core.files.storage import default_storage
 from django.core.files import File
 from django.core.files.images import get_image_dimensions
 
-from PIL import Image
+import PIL
 
 from os import path as os_path
 
-from PIL import ImageFile
-ImageFile.MAXBLOCK = 1000000 # fix problem with large images and optimized files
-
 ORIGINAL_FORMAT = 'original'
+MAXBLOCK = 3200*2000 # max block size for jpeg save in PIL
 
 class Wallet(object):
     # used for files in supported for load formats and don't supported for save (bmp, tiff, etc.)
@@ -24,7 +22,6 @@ class Wallet(object):
     image_types_extensions = {
         'PNG':  'png',
         'JPEG': 'jpg',
-        'GIF':  'gif',
     }
     # Original Image, stored after saving or loaded from disk
     _loaded_original = False
@@ -92,10 +89,10 @@ class Wallet(object):
             return None
         if not self._loaded_original:
             image = self.storage.open(self.get_path(ORIGINAL_FORMAT))
-            self._loaded_original = Image.open(image)
+            self._loaded_original = PIL.Image.open(image)
         return self._loaded_original
  
-    def save(self, image, process_all_formats=False):
+    def save(self, image):
         """
         Loads new image to wallet.
         image may be path to file, django file or pil image
@@ -109,13 +106,13 @@ class Wallet(object):
         
         if not '%(size)s' in self._pattern:
             raise ValueError('Pattern string should contain %%(size)s replace. Given pattern: %s' % self._pattern)
-        
+    
         if isinstance(image, basestring):
             image = self.storage.open(image)
-            image = Image.open(image)
+            image = PIL.Image.open(image)
         elif isinstance(image, (file, File)):
-            image = Image.open(image)
-        elif isinstance(image, Image):
+            image = PIL.Image.open(image)
+        elif isinstance(image, PIL.Image):
             pass
         else:
             raise ValueError("Argument of this type is not supported.")
@@ -125,16 +122,11 @@ class Wallet(object):
         self.original_image_type = self.get_image_type(ORIGINAL_FORMAT, self._loaded_original.format)
         
         # process original image
-        self._loaded_original = self.process_image(ORIGINAL_FORMAT, save=True)
-        
-        if process_all_formats:
-            for format in self.formats:
-                if format != ORIGINAL_FORMAT:
-                    self.process_image(format, save=True)
+        self._loaded_original = self.process_format(ORIGINAL_FORMAT, save=True)
         
         return self._loaded_original
     
-    def process_image(self, format, image=None, save=False):
+    def process_format(self, format, image=None, save=False):
         """
         Process image, make one thumb from given format 
         """
@@ -156,20 +148,35 @@ class Wallet(object):
             file = self.storage.open(self.get_path(format), mode='wb')
             try:
                 image_type = self.get_image_type(format)
+                if image_type == 'JPEG' and not image.mode in PIL.JpegImagePlugin.RAWMODE:
+                    image = image.convert('RGB')
+                    
                 try:
+                    # Try save image with big block size
+                    OLD_MAXBLOCK = PIL.ImageFile.MAXBLOCK
+                    PIL.ImageFile.MAXBLOCK = MAXBLOCK
                     image.save(file, format=image_type, **save_params)
                 except IOError:
+                    # Else remove all options affected expected block size
                     if 'optimize' in save_params:
                         del save_params['optimize']
                     if 'progression' in save_params:
                         del save_params['progression']
                     if 'progressive' in save_params:
                         del save_params['progressive']
-                    image.convert('RGB').save(file, format=image_type, **save_params)
+                    image.save(file, format=image_type, **save_params)
+                finally:
+                    PIL.ImageFile.MAXBLOCK = OLD_MAXBLOCK
+                
             finally:
                 file.close()
         
         return image
+    
+    def process_all_formats(self):
+        for format in self.formats:
+            if format != ORIGINAL_FORMAT:
+                self.process_format(format, save=True)
     
     def copy(self, wallet):
         """
@@ -212,7 +219,7 @@ class Wallet(object):
             return (None, None)
         path = self.get_path(format)
         if format != ORIGINAL_FORMAT and not self.storage.exists(path):
-            image = self.process_image(format, save=True)
+            image = self.process_format(format, save=True)
             return image.size
         else:
             return get_image_dimensions(self.storage.open(path))
@@ -223,7 +230,7 @@ class Wallet(object):
             path = self.get_path(format)
             # if image not found, it created
             if format != ORIGINAL_FORMAT and not self.storage.exists(path):
-                self.process_image(format, save=True)
+                self.process_format(format, save=True)
             return self.storage.url(path)
         else:
             return None
@@ -262,8 +269,9 @@ def reverse_curry(_curried_func, *moreargs, **morekwargs):
         return _curried_func(*(args+moreargs), **dict(kwargs, **morekwargs))
     return _curried
 
+from imagewallet import filters
+
 def Filter(filter, *args, **kwargs):
-    from imagewallet import filters
     if callable(filter):
         pass
     elif callable(getattr(filters, filter, False)):
