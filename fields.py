@@ -22,7 +22,7 @@ class FieldWallet(Wallet):
         self.delete(save=False)
         self.pattern = self.field.generate_filename(self.instance, name)
         super(FieldWallet, self).save(image)
-        if self.field.process_all_formats:
+        if self.field.process_on_save:
             self.process_all_formats()
         if save:
             self.instance.save()
@@ -33,7 +33,8 @@ class FieldWallet(Wallet):
             raise ValueError("Can not save another images in saved wallet. Delete first.")
         if not wallet:
             return
-        self.pattern = self.field.generate_filename(self.instance, wallet.get_path(ORIGINAL_FORMAT))
+        old_path = wallet.get_path(ORIGINAL_FORMAT)
+        self.pattern = self.field.generate_filename(self.instance, old_path)
         super(FieldWallet, self).copy(wallet)
     
     def delete(self, save=True):
@@ -41,6 +42,12 @@ class FieldWallet(Wallet):
         if save:
             self.instance.save()
     delete.alters_data = True
+    
+    def __reduce__(self):
+        """ Return pattern and formats_info """
+        if self:
+            return (tuple, ((self.pattern, self.formats_info),))
+        return (unicode, u'')
 
 class WalletDescriptor(object):
     def __init__(self, field):
@@ -86,7 +93,7 @@ class WalletField(FileField):
     random_sings = 12
     
     def __init__(self, verbose_name=None, name=None, upload_to='', storage=None, 
-                 formats={}, process_all_formats=False, **kwargs):
+                 formats={}, process_on_save=False, **kwargs):
         kwargs.setdefault('max_length', 255)
         unique = kwargs.pop('unique', False)
         # set upload_to to empty string to prevent wrong handle
@@ -99,11 +106,11 @@ class WalletField(FileField):
         
         self.formats = {
             ORIGINAL_FORMAT: (
-                Filter('quality', 95),
+                Filter('quality', 90),
             ),
         }
         self.formats.update(formats)
-        self.process_all_formats = process_all_formats
+        self.process_on_save = process_on_save
         self.attr_class.populate_formats(self.formats.keys())
     
     def pre_save(self, model_instance, add):
