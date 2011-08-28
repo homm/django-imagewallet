@@ -2,6 +2,7 @@
 
 from django.db.models.fields.files import FileField
 from django.core.files import File
+from django.conf import settings
 from django.utils.encoding import force_unicode, smart_str
 
 from imagewallet import Wallet, Filter, ORIGINAL_FORMAT
@@ -10,6 +11,9 @@ from imagewallet.forms import WalletFileField
 import os
 import datetime
 import random
+
+serializer = getattr(settings, 'IMAGEWALLET_SERIALIZER', 'marshal')
+serializer = __import__(serializer)
 
 
 class FieldWallet(Wallet):
@@ -30,7 +34,7 @@ class FieldWallet(Wallet):
     
     def copy(self, wallet):
         if self:
-            raise ValueError("Can not save another images in saved wallet. Delete first.")
+            raise ValueError("Can not save another images in saved wallet.")
         if not wallet:
             return
         old_path = wallet.get_path(ORIGINAL_FORMAT)
@@ -58,14 +62,20 @@ class WalletDescriptor(object):
         wallet = value = instance.__dict__[field.name]
         # In most cases strings and Nones comes from database
         if isinstance(value, basestring) or value is None:
-            pattern = None
-            format = False
             if value:
                 try:
-                    pattern, format = value.rsplit(';', 1)
-                except ValueError:
-                    pass
-            wallet = field.attr_class(instance, field, pattern, format)
+                    pattern, formats_info = serializer.loads()
+                except (EOFError, ValueError, TypeError):
+                    # handle old format
+                    try:
+                        pattern, format = value.rsplit(';', 1)
+                        pattern = pattern.replace('%(size)s', '%(format)s')
+                        formats_info = {ORIGINAL_FORMAT: (format, 800, 800)}
+                    except ValueError:
+                        raise ValueError('Wrong value for imagewallet.')
+                wallet = field.attr_class(instance, field, pattern, formats_info)
+            else:
+                wallet = field.attr_class(instance, field)
             instance.__dict__[field.name] = wallet
         # value uploaded from form
         elif isinstance(value, File):
@@ -94,7 +104,7 @@ class WalletField(FileField):
     
     def __init__(self, verbose_name=None, name=None, upload_to='', storage=None, 
                  formats={}, process_on_save=False, **kwargs):
-        kwargs.setdefault('max_length', 255)
+        kwargs.setdefault('max_length', 511)
         unique = kwargs.pop('unique', False)
         # set upload_to to empty string to prevent wrong handle
         super(WalletField, self).__init__(verbose_name, name, '', storage, **kwargs)
