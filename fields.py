@@ -64,7 +64,7 @@ class WalletDescriptor(object):
             # code moved from wallet.save
             if wallet:
                 wallet.delete(save=False)
-            wallet.pattern = self.generate_filename(instance, value.name)
+            wallet.pattern = field.generate_filename(instance, value.name)
             wallet.save(value, save=False)
             instance.__dict__[field.name] = wallet
         # copy image from foreign wallets
