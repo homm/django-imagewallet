@@ -23,6 +23,9 @@ class Wallet(object):
         'PNG':  'png',
         'JPEG': 'jpg',
     }
+    depriceted_image_types = {
+        'GIF':  'gif',
+    }
     # Original Image, stored after saving or loaded from disk
     _loaded_original = False
     
@@ -238,7 +241,14 @@ class Wallet(object):
     def get_path(self, format):
         if not self._pattern:
             return None
-        extension = self.image_types_extensions[self.get_image_type(format)]
+        image_type = self.get_image_type(format);
+        extension = self.image_types_extensions.get(image_type)
+        if extension is None:
+            # image type no longer supported
+            original_image = self.depriceted_image_types[image_type]
+            self.original_image_type = False
+            self.save(original_image)
+
         return self._pattern % {'size': format, 'extension': extension}
     
     def get_image_type(self, format, original_image_type=None):
