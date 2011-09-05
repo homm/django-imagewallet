@@ -18,7 +18,7 @@ class FieldWallet(Wallet):
         self.instance = instance
         self.field = field
         
-    def save(self, name, image, save=True):
+    def save(self, image, save=True):
         super(FieldWallet, self).save(image)
         if self.field.process_all_formats:
             self.process_all_formats()
@@ -65,7 +65,7 @@ class WalletDescriptor(object):
             if wallet:
                 wallet.delete(save=False)
             wallet.pattern = self.generate_filename(instance, value.name)
-            wallet.save(value.name, value, save=False)
+            wallet.save(value, save=False)
             instance.__dict__[field.name] = wallet
         # copy image from foreign wallets
         elif isinstance(value, Wallet) and (not isinstance(value, field.attr_class) 
