@@ -9,7 +9,7 @@ from django.core.files.storage import default_storage
 from django.core.files import File
 from django.core.files.images import get_image_dimensions
 
-import PIL
+import PIL, PIL.Image, PIL.ImageFile, PIL.JpegImagePlugin
 
 from os import path as os_path
 
@@ -115,7 +115,7 @@ class Wallet(object):
             image = PIL.Image.open(image)
         elif isinstance(image, (file, File)):
             image = PIL.Image.open(image)
-        elif isinstance(image, PIL.Image):
+        elif isinstance(image, PIL.Image.Image):
             pass
         else:
             raise ValueError("Argument of this type is not supported.")
