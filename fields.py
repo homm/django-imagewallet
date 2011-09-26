@@ -70,7 +70,7 @@ class WalletDescriptor(object):
         # copy image from foreign wallets
         elif isinstance(value, Wallet) and (not isinstance(value, field.attr_class) 
                                             or value.instance != instance or value.field != field):
-            wallet = self.field.attr_class(instance, self.field)
+            wallet = field.attr_class(instance, field)
             wallet.copy(value)
             instance.__dict__[field.name] = wallet
         return wallet
