@@ -98,7 +98,7 @@ class Resize(object):
         if isinstance(size, basestring) and len(re.split(u'[×x*]', size)) == 2:
             size = re.split(u'[×x*]', size, maxsplit=1)
         elif isinstance(size, (tuple, list)) and len(size) == 2:
-            pass
+            size = list(size)
         else:
             raise TypeError('Size have unexpected type')
         
@@ -136,7 +136,7 @@ class Resize(object):
             if new_height > image.size[1]:
                 new_height = image.size[1]
         
-        if new_width != image.size[0] or new_height != image.size[1]: 
+        if new_width != image.size[0] or new_height != image.size[1]:
             image = image.resize((new_width, new_height), Image.ANTIALIAS)
         
         if not requested_width:
@@ -145,7 +145,7 @@ class Resize(object):
             requested_height = new_height
         
         if (self.strict_size[0] and new_width != requested_width) or (self.strict_size[1] and new_height != requested_height):
-            offset_x = 0       
+            offset_x = 0
             if self.strict_size[0]:
                 if self.align[0] is False:
                     offset_x = requested_width - new_width
@@ -156,7 +156,7 @@ class Resize(object):
                             offset_x = requested_width - new_width + offset_x
                     except:
                         if type(self.align[0]) is str and self.align[0].rstrip('%').isdigit():
-                            offset_x = int(round((requested_width - new_width) * int(self.align[0].rstrip('%')) / 100.0))
+                            offset_x = int(round((requested_width - new_width) * float(self.align[0].rstrip('%')) / 100.0))
                         else:
                             raise TypeError('align format not supported')
                 new_width = requested_width
@@ -172,12 +172,12 @@ class Resize(object):
                             offset_y = requested_height - new_height + offset_y
                     except:
                         if type(self.align[1]) is str and self.align[1].rstrip('%').isdigit():
-                            offset_y = int(round((requested_height - new_height) * int(self.align[1].rstrip('%')) / 100.0))
+                            offset_y = int(round((requested_height - new_height) * float(self.align[1].rstrip('%')) / 100.0))
                         else:
                             raise TypeError('align format not supported')
                 new_height = requested_height
             
-            if image.mode in PALETTE_MODES: 
+            if image.mode in PALETTE_MODES:
                 bg = Image.new(image.mode, (new_width, new_height), image.info.get('transparency'))
                 bg.putpalette(image.getpalette())
             else:
@@ -185,11 +185,57 @@ class Resize(object):
             bg.paste(image, (offset_x, offset_y))
             bg.info = image.info
             image = bg
-        
+
         return image
 
 resize = Resize
-    
+
+
+def crop(image, size, align=('50%', '50%')):
+    if isinstance(size, basestring) and len(re.split(u'[×x*]', size)) == 2:
+        size = re.split(u'[×x*]', size, maxsplit=1)
+    elif isinstance(size, (tuple, list)) and len(size) == 2:
+        size = list(size)
+    else:
+        raise TypeError('Size have unexpected type')
+
+    if size[0] in (None, '', '?'):
+        size[0] = image.size[0]
+    if size[1] in (None, '', '?'):
+        size[1] = image.size[1]
+
+    size = map(int, size)
+
+    offset = [0, 0]
+    # фильтр не может увеличивать изображения
+    for i in (0, 1):
+        if size[i] >= image.size[i]:
+            size[i] = image.size[i]
+            continue
+        try:
+            int(align[i])
+        except TypeError:
+            # False или None
+            offset[i] = size[0] - image.size[i]
+        except ValueError:
+            # с процентами
+            a = float(align[i].rstrip('%'))
+            offset[i] = int(round((size[i] - image.size[i]) * a / 100.0))
+        else:
+            # число
+            offset[i] = int(align[i])
+
+    if image.mode in PALETTE_MODES:
+        bg = Image.new(image.mode, size, image.info.get('transparency'))
+        bg.putpalette(image.getpalette())
+    else:
+        bg = Image.new(image.mode, size, image.info.get('_filter_background_color', (0, 0, 0, 0)))
+
+    bg.paste(image, tuple(offset))
+    bg.info = image.info
+    image = bg
+    return image
+
 
 def background(image, color):
     if not isinstance(color, tuple) or len(color) != 4 or color[3] != 0:
