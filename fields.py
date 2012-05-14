@@ -93,7 +93,7 @@ class WalletField(FileField):
     random_sings = 12
 
     def __init__(self, verbose_name=None, name=None, upload_to='', storage=None,
-                 formats={}, process_all_formats=False, **kwargs):
+            formats={}, process_all_formats=False, **kwargs):
         kwargs.setdefault('max_length', 255)
         unique = kwargs.pop('unique', False)
         # set upload_to to empty string to prevent wrong handle

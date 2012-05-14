@@ -237,6 +237,10 @@ def crop(image, size, align=('50%', '50%')):
     return image
 
 
+def padding():
+    pass
+
+
 def background(image, color):
     if not isinstance(color, tuple) or len(color) != 4 or color[3] != 0:
         if image.mode in PALETTE_MODES: 
