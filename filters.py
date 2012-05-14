@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import re
-from PIL import Image, ImageFilter
+
+from PIL import Image
 from PIL.ImageColor import getrgb
-from PIL.ImageFilter import BLUR, CONTOUR, DETAIL, EDGE_ENHANCE, EDGE_ENHANCE_MORE, EMBOSS
-from PIL.ImageFilter import FIND_EDGES, SMOOTH, SMOOTH_MORE, SHARPEN
+from PIL.ImageFilter import (BLUR, CONTOUR, DETAIL,  # @UnusedImport
+    EDGE_ENHANCE, EDGE_ENHANCE_MORE, EMBOSS, FIND_EDGES,  # @UnusedImport
+    SMOOTH, SMOOTH_MORE, SHARPEN)  # @UnusedImport
 
 from imagewallet.image import paste_composite, PALETTE_MODES
 
@@ -23,41 +25,41 @@ class Resize(object):
     @classmethod
     def method_not_more(cls, original_width, original_height, requested_width, requested_height):
         master = None
-        
+
         if not requested_width:
             master = 'height'
         if not requested_height:
             master = 'width'
-        
+
         if not master:
             master = 'width' if (original_width / float(requested_width)) > (original_height / float(requested_height)) else 'height'
-            
+
         if master == 'width':
             requested_height = original_height * requested_width / float(original_width)
         else:
             requested_width = original_width * requested_height / float(original_height)
-        
+
         return int(requested_width), int(requested_height)
-    
+
     @classmethod
     def method_not_less(cls, original_width, original_height, requested_width, requested_height):
         master = None
-        
+
         if not requested_width:
             master = 'height'
         if not requested_height:
             master = 'width'
-        
+
         if not master:
             master = 'width' if (original_width / float(requested_width)) < (original_height / float(requested_height)) else 'height'
-            
+
         if master == 'width':
             requested_height = original_height * requested_width / float(original_width)
         else:
             requested_width = original_width * requested_height / float(original_height)
-        
+
         return int(requested_width), int(requested_height)
-    
+
     @classmethod
     def method_exactly(cls, original_width, original_height, requested_width, requested_height):
         if not requested_width:
@@ -65,20 +67,20 @@ class Resize(object):
         if not requested_height:
             requested_height = original_height
         return requested_width, requested_height
-    
+
     @classmethod
     def method_median(cls, original_width, original_height, requested_width, requested_height):
         min_width, min_height = cls.method_not_more(original_width, original_height, requested_width, requested_height)
         max_width, max_height = cls.method_not_less(original_width, original_height, requested_width, requested_height)
         return int((min_width + max_width) / 2), int((min_height + max_height) / 2)
-    
+
     METHOD_FUNCTIONS = {
         NOT_MORE: 'method_not_more',
         NOT_LESS: 'method_not_less',
         EXACTLY: 'method_exactly',
         MEDIAN: 'method_median',
     }
-    
+
     def __init__(self, size, method=NOT_MORE, enlarge=False, strict_size=(False, False), align=('50%', '50%')):
         """
         Convert one file to another according given options.
@@ -93,7 +95,7 @@ class Resize(object):
         if not isinstance(align, (tuple, list)):
             align = (align, align)
         self.align = align
-    
+
     def _parse_params(self, size, method, enlarge, strict_size):
         if isinstance(size, basestring) and len(re.split(u'[×x*]', size)) == 2:
             size = re.split(u'[×x*]', size, maxsplit=1)
@@ -101,49 +103,50 @@ class Resize(object):
             size = list(size)
         else:
             raise TypeError('Size have unexpected type')
-        
+
         if not isinstance(strict_size, (tuple, list)):
             strict_size = (strict_size, strict_size)
-        
+
         if size[0] in (None, '', '?'):
             size[0] = 0
         if size[1] in (None, '', '?'):
             size[1] = 0
-        
+
         size = map(int, size)
-        
+
         if method in self.METHOD_FUNCTIONS:
             method = getattr(self, self.METHOD_FUNCTIONS[method])
         elif callable(method):
             pass
         else:
             raise TypeError('Method should be callable or constant')
-        
+
         return size, method, enlarge, strict_size
-        
+
     def __call__(self, image):
         if not any(self.size):
             """ if size not specified, no need do anything """
             return image
-        
+
         requested_width, requested_height = self.size
-        
-        new_width, new_height = self.method(image.size[0], image.size[1], self.size[0], self.size[1])
-        
+
+        new_width, new_height = self.method(image.size[0], image.size[1],
+            self.size[0], self.size[1])
+
         if not self.enlarge:
             if new_width > image.size[0]:
                 new_width = image.size[0]
             if new_height > image.size[1]:
                 new_height = image.size[1]
-        
+
         if new_width != image.size[0] or new_height != image.size[1]:
             image = image.resize((new_width, new_height), Image.ANTIALIAS)
-        
+
         if not requested_width:
             requested_width = new_width
         if not requested_height:
             requested_height = new_height
-        
+
         if (self.strict_size[0] and new_width != requested_width) or (self.strict_size[1] and new_height != requested_height):
             offset_x = 0
             if self.strict_size[0]:
@@ -160,7 +163,7 @@ class Resize(object):
                         else:
                             raise TypeError('align format not supported')
                 new_width = requested_width
-            
+
             offset_y = 0
             if self.strict_size[1]:
                 if self.align[1] is False:
@@ -176,12 +179,14 @@ class Resize(object):
                         else:
                             raise TypeError('align format not supported')
                 new_height = requested_height
-            
+
             if image.mode in PALETTE_MODES:
-                bg = Image.new(image.mode, (new_width, new_height), image.info.get('transparency'))
+                bg = Image.new(image.mode, (new_width, new_height),
+                    image.info.get('transparency'))
                 bg.putpalette(image.getpalette())
             else:
-                bg = Image.new(image.mode, (new_width, new_height), image.info.get('_filter_background_color', (0, 0, 0, 0)))
+                bg = Image.new(image.mode, (new_width, new_height),
+                    image.info.get('_filter_background_color', (0, 0, 0, 0)))
             bg.paste(image, (offset_x, offset_y))
             bg.info = image.info
             image = bg
@@ -229,7 +234,8 @@ def crop(image, size, align=('50%', '50%')):
         bg = Image.new(image.mode, size, image.info.get('transparency'))
         bg.putpalette(image.getpalette())
     else:
-        bg = Image.new(image.mode, size, image.info.get('_filter_background_color', (0, 0, 0, 0)))
+        bg = Image.new(image.mode, size,
+            image.info.get('_filter_background_color', (0, 0, 0, 0)))
 
     bg.paste(image, tuple(offset))
     bg.info = image.info
@@ -243,24 +249,24 @@ def padding():
 
 def background(image, color):
     if not isinstance(color, tuple) or len(color) != 4 or color[3] != 0:
-        if image.mode in PALETTE_MODES: 
+        if image.mode in PALETTE_MODES:
             if 'transparency' in image.info:
                 if not isinstance(color, tuple):
                     color = getrgb(color)
-                
+
                 trans = image.info['transparency']
                 del image.info['transparency']
-                
+
                 palette = image.getpalette()
                 palette[trans * 3 + 0] = color[0]
                 palette[trans * 3 + 1] = color[1]
                 palette[trans * 3 + 2] = color[2]
                 image.putpalette(palette)
- 
+
         else:
             bg = Image.new(image.mode, image.size, color)
             bg.info = image.info
-            
+
             if image.mode in ('RGBA', 'LA'):
                 if isinstance(color, tuple) and len(color) == 4:
                     # semitransparent background
@@ -278,10 +284,11 @@ def background(image, color):
 
 
 def ambilight(image, size, scale=0.9, blur=5, crop=4):
-    bg = image.resize((size[0] + crop*2, size[1] + crop*2), Image.ANTIALIAS)
-    bg = filter(bg, BLUR, blur).crop((crop, crop, bg.size[0]-crop, bg.size[1]-crop))
-    image.thumbnail(tuple([int(s*scale) for s in size]), Image.ANTIALIAS)
-    bg.paste(image, tuple([int((size[i]-image.size[i])/2) for i in [0,1]]))
+    bg = image.resize((size[0] + crop * 2, size[1] + crop * 2), Image.ANTIALIAS)
+    bg = filter(bg, BLUR, blur).crop((crop, crop, bg.size[0] - crop,
+        bg.size[1] - crop))
+    image.thumbnail(tuple([int(s * scale) for s in size]), Image.ANTIALIAS)
+    bg.paste(image, tuple([int((size[i] - image.size[i]) / 2) for i in [0, 1]]))
     return bg
 
 
@@ -320,4 +327,3 @@ def progressive(image):
 def optimize(image):
     image.info['optimize'] = True
     return image
-

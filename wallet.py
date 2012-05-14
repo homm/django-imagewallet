@@ -20,7 +20,11 @@ class ImageFormat(object):
     Один формат может быть приязан к нескольким полям, поэтому не содержит
     ссылки на поле.
     """
-    suppoted_file_types = ['JPEG', 'PNG']
+    suppoted_file_types = {
+        'JPEG': ('jpg', ),
+        'PNG': ('png', )
+    }
+    failback_file_type = 'PNG'
 
     def __init__(self, filters, file_type=None, mode=None, background='white',
             **options):
@@ -43,7 +47,7 @@ class ImageFormat(object):
         self.filters = filters
         self.file_type = file_type.upper()
         if self.file_type not in self.suppoted_file_types:
-            raise ValueError("Not allowed file type: %s" % file_type)
+            raise ValueError("Not allowed file type: {}".format(file_type))
         self.mode = mode.upper()
         self.background = background
         self.options = options
@@ -60,6 +64,8 @@ class ImageFormat(object):
         """
         if self.mode is None or self.mode == image.mode:
             return image
+        # TODO: Если self.mode непрозрачный, а image.mode был прозрачным,
+        # нужно под image подложить self.background
         return image.convert(self.mode, **self._get_options('mode_'))
 
     def process(self, image):
@@ -73,52 +79,58 @@ class ImageFormat(object):
 
         return image
 
+    def _get_save_file_type(self, image):
+        # Если тип файла не задан, он берется из исходного изображения.
+        # Но только если это поддерживаемый тип. Иначе сохраняем в PNG.
+        if self.file_type is None:
+            if image.format not in self.suppoted_file_types:
+                return self.failback_file_type
+            return image.format
+        return self.file_type
+
     def _get_save_params(self, image, file_type):
+        # Опции для сохранения берутся из изображения и self.options
         save_params = self._get_options(file_type.lower() + '_')
         if file_type == 'JPEG' and 'progression' in image.info:
             save_params.setdefault('progressive', image.info['progression'])
         return save_params
 
-    def save_to_file(self, image, file):
-        """
-        Сохраняет уже готовое изображение в файл.
-        """
-        # Если тип файла не задан, он берется из исходного изображения.
-        # Но только если это поддерживаемый тип. Иначе сохраняем в PNG.
-        if self.file_type is None:
-            if image.format in self.suppoted_file_types:
-                file_type = image.format
-            else:
-                file_type = 'PNG'
-        else:
-            file_type = self.file_type
-
-        # Каждый тип файла поддерживает свои режжимы. Если картинка не такого
+    def _prepare_for_save(self, image, file_type):
+        # Каждый тип файла поддерживает свои режимы. Если картинка не такого
         # режима, нужно перевести к универсальному.
         if file_type == 'JPEG':
-            supported_modes = PIL.JpegImagePlugin.RAWMODE
+            supported = ['1', 'L', 'RGB', 'RGBA', 'RGBX', 'CMYK', 'YCbCr']
         elif file_type == 'PNG':
-            supported_modes = ['1', 'L', 'P', 'RGB', 'RGBA']
-        if image.mode not in supported_modes:
-            image = image.convert('RGB')
+            supported = ['1', 'L', 'P', 'RGB', 'RGBA']
 
-        # Опции для сохранения берутся из картинки и self.options
-        save_params = self._get_save_params(image, file_type)
+        return image if image.mode in supported else image.convert('RGB')
 
+    def _save_to_file(self, image, file, file_type, save_params):
+        # Если бы библиотека PIL была без приколов, тут была бы одна строчка:
+        # image.save(file, format=file_type, **save_params)
         try:
             OLD_MAXBLOCK = PIL.ImageFile.MAXBLOCK
             PIL.ImageFile.MAXBLOCK = MAXBLOCK
             image.save(file, format=file_type, **save_params)
         except IOError:
-            if 'optimize' in save_params:
-                del save_params['optimize']
-            if 'progression' in save_params:
-                del save_params['progression']
-            if 'progressive' in save_params:
-                del save_params['progressive']
+            save_params.pop('optimize', None)
+            save_params.pop('progression', None)
+            save_params.pop('progressive', None)
             image.save(file, format=file_type, **save_params)
         finally:
             PIL.ImageFile.MAXBLOCK = OLD_MAXBLOCK
+
+    def save(self, image, file):
+        """
+        Сохраняет уже готовое изображение в файл.
+        """
+        file_type = self._get_save_file_type(image)
+
+        image = self._prepare_for_save(image, file_type)
+
+        save_params = self._get_save_params(image, file_type)
+
+        self._save_to_file(image, file, file_type, save_params)
 
 
 class Wallet(object):
