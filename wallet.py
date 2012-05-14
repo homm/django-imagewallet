@@ -26,8 +26,8 @@ class ImageFormat(object):
     }
     failback_file_type = 'PNG'
 
-    def __init__(self, filters=None, file_type=None, mode=None, background='white',
-            **options):
+    def __init__(self, filters=None, file_type=None, mode=None,
+            background='white', **options):
         """
         Filters — список вызываемых объектов которым передается картинка
             во время обработки.
@@ -80,6 +80,10 @@ class ImageFormat(object):
         return image
 
     def get_file_type(self, original_file_type):
+        """
+        Возвращает тип файла сгенерированного изображения на основе типа файла,
+        из которого генерируется изображение.
+        """
         # Если тип файла не задан, он берется из исходного изображения.
         # Но только если это поддерживаемый тип. Иначе сохраняем в PNG.
         if self.file_type is None:
@@ -133,7 +137,44 @@ class ImageFormat(object):
         self._save_to_file(image, file, file_type, save_params)
 
 
-class Wallet(object):
+class WalletEnvironment(object):
+    """
+    Набор характеристик для группы хранилищ изображений.
+    """
+
+    def __init__(self, formats=None, storage=None, original_storage=None,
+            process_all_formats=False, cache=None):
+        """
+        Formats — словарь с форматами изображений. Строки-ключи становятся
+            именами. Можно не передавать, позже добавить с помошью функции
+            add_format. ORIGINAL_FORMAT задается всегда.
+        Storage — хранилище для сгенерированных изображений. Если не указано,
+            берется стандартной хранилице (чаще папка settings.MEDIA_ROOT).
+        Original_storage — хранилище для оригинальных озображений. Если не
+            указано, берется storage или default_storage.
+        Process_all_formats — флаг, нужно ли при добавлении картинки сразу
+            генерировать все возможные миниатюры.
+        Cache — кеш, который будет использоваться для хранения информации,
+            что изображение сгенерированно, а также размеры и тип
+            сгенерированного изображения.
+        """
+        self.formats = {}
+        self.add_format(ORIGINAL_FORMAT, ImageFormat(jpeg_quality=95))
+        if formats:
+            for name, format in formats.iteritems():
+                self.add_format(name, format)
+        self.storage = storage or default_storage
+        self.original_storage = original_storage or storage or default_storage
+        self.process_all_formats = process_all_formats
+        self.cache = cache
+
+    def add_format(self, name, format):
+        if name == ORIGINAL_FORMAT:
+            self.original_image_format = format
+        self.formats[name] = format
+
+
+class OldWallet(object):
     # this type used when image can be loaded, but it's type not supported
     image_type_fallback = 'PNG'
     image_types_extensions = {
@@ -188,7 +229,7 @@ class Wallet(object):
 
     @classmethod
     def populate_formats(cls, formats):
-        cls = Wallet
+        cls = OldWallet
         for format in formats:
             url_name = 'url_%s' % format
             if not hasattr(cls, url_name):
