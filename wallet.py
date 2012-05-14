@@ -20,7 +20,7 @@ class ImageFormat(object):
     Один формат может быть приязан к нескольким полям, поэтому не содержит
     ссылки на поле.
     """
-    suppoted_file_types = {
+    file_types = {
         'JPEG': ('jpg', ),
         'PNG': ('png', )
     }
@@ -46,7 +46,7 @@ class ImageFormat(object):
         """
         self.filters = filters or []
         self.file_type = file_type and file_type.upper()
-        if file_type and self.file_type not in self.suppoted_file_types:
+        if file_type and self.file_type not in self.file_types:
             raise ValueError("Not allowed file type: {}".format(file_type))
         self.mode = mode and mode.upper()
         self.background = background
@@ -87,9 +87,9 @@ class ImageFormat(object):
         # Если тип файла не задан, он берется из исходного изображения.
         # Но только если это поддерживаемый тип. Иначе сохраняем в PNG.
         if self.file_type is None:
-            if original_file_type not in self.suppoted_file_types:
-                return self.failback_file_type
-            return original_file_type
+            if original_file_type in self.file_types:
+                return original_file_type
+            return self.failback_file_type
         return self.file_type
 
     def _get_save_params(self, image, file_type):
@@ -107,7 +107,9 @@ class ImageFormat(object):
         elif file_type == 'PNG':
             supported = ['1', 'L', 'P', 'RGB', 'RGBA']
 
-        return image if image.mode in supported else image.convert('RGB')
+        if image.mode not in supported:
+            image = image.convert('RGB')
+        return image
 
     def _save_to_file(self, image, file, file_type, save_params):
         # Если бы библиотека PIL была без приколов, тут была бы одна строчка:
@@ -126,8 +128,11 @@ class ImageFormat(object):
 
     def save(self, image, file):
         """
-        Сохраняет уже готовое изображение в файл.
+        Сохраняет уже готовое изображение в файл. Вызывающий должен
+        позаботиться, чтобы image.format было заполнено верно.
         """
+        # Если изображение не загружено с диска (format пустой),
+        # get_file_type вернет file_type по-умолчанию.
         file_type = self.get_file_type(image.format)
 
         image = self._prepare_for_save(image, file_type)
@@ -136,42 +141,140 @@ class ImageFormat(object):
 
         self._save_to_file(image, file, file_type, save_params)
 
+        # т.к. файл уже сохранен, в этом формате, присвиваем ему его.
+        image.format = file_type
+        return image
 
-class WalletEnvironment(object):
+
+class WalletMetaclass(type):
+    def __new__(cls, name, bases, attrs):
+        super_new = super(WalletMetaclass, cls).__new__
+        parents = [b for b in bases if isinstance(b, WalletMetaclass)]
+        if not parents:
+            # If this isn't a subclass of Model, don't do anything special.
+            return super_new(cls, name, bases, attrs)
+
+        # Итерируем пользовательские стрибуты
+        for name, format in attrs.iteritems():
+            if not isinstance(format, ImageFormat):
+                continue
+#            # Если находим среди них ImageFormat
+#            attrs['path_' + name]
+        return super_new(cls, name, bases, attrs)
+
+
+class Wallet(object):
     """
-    Набор характеристик для группы хранилищ изображений.
+    Объекты хранилищ похожи на модели в django. Для каждого набора форматов
+    нужно отнаследоваться от класса Wallet и объявить экземпляры ImageFormat
+    как его элементы.
     """
+    __metaclass__ = WalletMetaclass
 
-    def __init__(self, formats=None, storage=None, original_storage=None,
-            process_all_formats=False, cache=None):
-        """
-        Formats — словарь с форматами изображений. Строки-ключи становятся
-            именами. Можно не передавать, позже добавить с помошью функции
-            add_format. ORIGINAL_FORMAT задается всегда.
-        Storage — хранилище для сгенерированных изображений. Если не указано,
-            берется стандартной хранилице (чаще папка settings.MEDIA_ROOT).
-        Original_storage — хранилище для оригинальных озображений. Если не
-            указано, берется storage или default_storage.
-        Process_all_formats — флаг, нужно ли при добавлении картинки сразу
-            генерировать все возможные миниатюры.
-        Cache — кеш, который будет использоваться для хранения информации,
-            что изображение сгенерированно, а также размеры и тип
-            сгенерированного изображения.
-        """
-        self.formats = {}
-        self.add_format(ORIGINAL_FORMAT, ImageFormat(jpeg_quality=95))
-        if formats:
-            for name, format in formats.iteritems():
-                self.add_format(name, format)
-        self.storage = storage or default_storage
-        self.original_storage = original_storage or storage or default_storage
-        self.process_all_formats = process_all_formats
-        self.cache = cache
+    storage = default_storage
+    original_storage = default_storage
 
-    def add_format(self, name, format):
-        if name == ORIGINAL_FORMAT:
-            self.original_image_format = format
-        self.formats[name] = format
+    # Единственный формат по-умолчанию, оригинальное изображение. Может быть
+    # перекрыто.
+    original = ImageFormat(jpeg_quality=95)
+
+    @staticmethod
+    def _save_format(format, image, storage, file_path):
+        """
+        Сохраняет изображение с применением заданного формата.
+        """
+        # сохраняем на тот случай, если фильтры потрут
+        original_file_type = image.format
+
+        # накладываем фильтры
+        image = format.process(image)
+
+        file = storage.open(file_path, mode='wb')
+        try:
+            image.format = original_file_type
+            return format.save(image, file)
+        finally:
+            file.close()
+
+    @classmethod
+    def object_from_image(cls, image, file_pattern):
+        """
+        Создает новый объект подкласса Wallet из изображения.
+        """
+        format = cls.original
+
+        # Тип файла, которого будет оригинальное изображение.
+        original_file_type = format.get_file_type(image.format)
+        # Расширение — первый элемент в описании типа файла.
+        extension = format.file_types[original_file_type][0]
+        file_path = file_pattern.format(f=ORIGINAL_FORMAT, e=extension)
+
+        cls._save_format(cls.original, image, cls.original_storage, file_path)
+
+        return cls(file_pattern, original_file_type)
+
+    def __init__(self, file_pattern, original_file_type):
+        assert '{f}' in file_pattern
+        self.file_pattern = file_pattern
+        self.original_file_type = original_file_type
+
+    def path_original(self):
+        """
+        Возвращает путь до файла в сторадже для оргинального изображения.
+        """
+        # Расширение — первый элемент в описании типа файла.
+        extension = self.original.file_types[self.original_file_type][0]
+        return self.file_pattern.format(f=ORIGINAL_FORMAT, e=extension)
+
+    def url_original(self):
+        """
+        Возаврщает url до оргинального изображения.
+        """
+        return self.original_storage.url(self.path_original())
+
+    def load_original(self):
+        """
+        Загружает экземпляр оригинального изображения.
+        """
+        file = self.original_storage.open(self.path_original())
+        # Наверное, неплохо было бы в format получившеся картинки положить
+        # self.original_file_type. Будет странно и непонятно, если они
+        # не совпадут. Но возможно если image.format не будет соответствовать
+        # image.mode, будет еще хуже.
+        return PIL.Image.open(file)
+
+    def _get_path(self, name, format):
+        """
+        Возвращает путь до файла в сторадже для заданного формата, кроме
+        оригинального. Используется через проперти path_<name>.
+        """
+        file_type = format.get_file_type(self.original_file_type)
+        # Расширение — первый элемент в описании типа файла.
+        extension = format.file_types[file_type][0]
+        return self.file_pattern.format(f=name, e=extension)
+
+    def _get_url(self, name, format):
+        """
+        Возаврщает url до формата, кроме оригинального, проверяет что
+        изображение существует. Используется через проперти url_<name>.
+        """
+        file_path = self._get_path(name, format)
+        storage = self.storage
+        if not storage.exists(file_path):
+            self._save_format(format, self.load_original(), storage, file_path)
+        return storage.url(file_path)
+
+    def _load_format(self, name, format):
+        """
+        Загружает экземпляр изображения любого формата. Используется через
+        проперти load_<name>.
+        """
+        file_path = self._get_path(name, format)
+        storage = self.storage
+        if storage.exists(file_path):
+            return PIL.Image.open(storage.open(file_path))
+        return self._save_format(format, self.load_original(),
+            storage, file_path)
 
 
 class OldWallet(object):
