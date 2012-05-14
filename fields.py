@@ -8,7 +8,8 @@ from django.db.models.fields.files import FileField
 from django.core.files import File
 from django.utils.encoding import force_unicode, smart_str
 
-from imagewallet import Wallet, Filter, ORIGINAL_FORMAT
+from imagewallet import Wallet
+from imagewallet.wallet import ImageFormat, ORIGINAL_FORMAT
 
 
 class FieldWallet(Wallet):
@@ -86,6 +87,9 @@ class WalletDescriptor(object):
         return self.__set__(instance, None)
 
 
+original_image_format = ImageFormat(jpeg_quality=95)
+
+
 class WalletField(FileField):
     attr_class = FieldWallet
     descriptor_class = WalletDescriptor
@@ -105,9 +109,7 @@ class WalletField(FileField):
             self.get_directory_name = upload_to
 
         self.formats = {
-            ORIGINAL_FORMAT: (
-                Filter('quality', 95),
-            ),
+            ORIGINAL_FORMAT: original_image_format,
         }
         self.formats.update(formats)
         self.process_all_formats = process_all_formats

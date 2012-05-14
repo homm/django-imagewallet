@@ -26,7 +26,7 @@ class ImageFormat(object):
     }
     failback_file_type = 'PNG'
 
-    def __init__(self, filters, file_type=None, mode=None, background='white',
+    def __init__(self, filters=None, file_type=None, mode=None, background='white',
             **options):
         """
         Filters — список вызываемых объектов которым передается картинка
@@ -44,11 +44,11 @@ class ImageFormat(object):
             'jpeg_quality'. Могут быть указаны даже если file_type опущен. Для
             сolorspace должны начинаться с префикса 'mode_'.
         """
-        self.filters = filters
-        self.file_type = file_type.upper()
-        if self.file_type not in self.suppoted_file_types:
+        self.filters = filters or []
+        self.file_type = file_type and file_type.upper()
+        if file_type and self.file_type not in self.suppoted_file_types:
             raise ValueError("Not allowed file type: {}".format(file_type))
-        self.mode = mode.upper()
+        self.mode = mode and mode.upper()
         self.background = background
         self.options = options
 
@@ -79,13 +79,13 @@ class ImageFormat(object):
 
         return image
 
-    def _get_save_file_type(self, image):
+    def get_file_type(self, original_file_type):
         # Если тип файла не задан, он берется из исходного изображения.
         # Но только если это поддерживаемый тип. Иначе сохраняем в PNG.
         if self.file_type is None:
-            if image.format not in self.suppoted_file_types:
+            if original_file_type not in self.suppoted_file_types:
                 return self.failback_file_type
-            return image.format
+            return original_file_type
         return self.file_type
 
     def _get_save_params(self, image, file_type):
@@ -124,7 +124,7 @@ class ImageFormat(object):
         """
         Сохраняет уже готовое изображение в файл.
         """
-        file_type = self._get_save_file_type(image)
+        file_type = self.get_file_type(image.format)
 
         image = self._prepare_for_save(image, file_type)
 
