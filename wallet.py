@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
 
 import PIL
 
@@ -196,6 +197,8 @@ class Wallet(object):
         # накладываем фильтры
         image = format.process(image)
 
+        # Сохраняем файл по тому же пути, чтобы не создавать иерархию папок.
+        storage.save(file_path, ContentFile(''))
         file = storage.open(file_path, mode='wb')
         try:
             image.format = original_file_type
