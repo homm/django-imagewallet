@@ -75,7 +75,7 @@ class ImageFormat(object):
         image = self.prepare(image)
 
         for filter in self.filters:
-            image = filter(image)
+            image = filter(image, self)
 
         return image
 
@@ -141,7 +141,7 @@ class ImageFormat(object):
 
         self._save_to_file(image, file, file_type, save_params)
 
-        # т.к. файл уже сохранен, в этом формате, присвиваем ему его.
+        # т.к. файл уже сохранен в этом формате, присвиваем ему его.
         image.format = file_type
         return image
 
@@ -154,12 +154,21 @@ class WalletMetaclass(type):
             # If this isn't a subclass of Model, don't do anything special.
             return super_new(cls, name, bases, attrs)
 
-        # Итерируем пользовательские стрибуты
-        for name, format in attrs.iteritems():
+        def make_properties(name, format):
+            get_path = lambda self: Wallet._get_path(self, name, format)
+            get_url = lambda self: Wallet._get_url(self, name, format)
+            load_format = lambda self: Wallet._load_format(self, name, format)
+            return {'path_' + name: property(get_path),
+                'url_' + name: property(get_url),
+                'load_' + name: load_format}
+
+        # Итерируем пользовательские свойства. items делает копию в памяти,
+        # поэтому можно делать attrs.update
+        for name, format in attrs.items():
             if not isinstance(format, ImageFormat):
                 continue
-#            # Если находим среди них ImageFormat
-#            attrs['path_' + name]
+            # Если находим среди них ImageFormat
+            attrs.update(make_properties(name, format))
         return super_new(cls, name, bases, attrs)
 
 
@@ -218,6 +227,7 @@ class Wallet(object):
         self.file_pattern = file_pattern
         self.original_file_type = original_file_type
 
+    @property
     def path_original(self):
         """
         Возвращает путь до файла в сторадже для оргинального изображения.
@@ -226,17 +236,18 @@ class Wallet(object):
         extension = self.original.file_types[self.original_file_type][0]
         return self.file_pattern.format(f=ORIGINAL_FORMAT, e=extension)
 
+    @property
     def url_original(self):
         """
         Возаврщает url до оргинального изображения.
         """
-        return self.original_storage.url(self.path_original())
+        return self.original_storage.url(self.path_original)
 
     def load_original(self):
         """
         Загружает экземпляр оригинального изображения.
         """
-        file = self.original_storage.open(self.path_original())
+        file = self.original_storage.open(self.path_original)
         # Наверное, неплохо было бы в format получившеся картинки положить
         # self.original_file_type. Будет странно и непонятно, если они
         # не совпадут. Но возможно если image.format не будет соответствовать
@@ -267,7 +278,7 @@ class Wallet(object):
     def _load_format(self, name, format):
         """
         Загружает экземпляр изображения любого формата. Используется через
-        проперти load_<name>.
+        функцию load_<name>.
         """
         file_path = self._get_path(name, format)
         storage = self.storage
