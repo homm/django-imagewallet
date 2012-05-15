@@ -8,8 +8,8 @@ from django.db.models.fields.files import FileField
 from django.core.files import File
 from django.utils.encoding import force_unicode, smart_str
 
-from imagewallet import Wallet
-from imagewallet.wallet import ImageFormat, ORIGINAL_FORMAT
+import PIL
+from imagewallet import Wallet, ORIGINAL_FORMAT
 
 
 class NewWalletDescriptor(object):
@@ -22,11 +22,98 @@ class NewWalletDescriptor(object):
     def __init__(self, field):
         self.field = field
         self.field_name = field.name
+        self.attr_class = field.attr_class
 
     def __get__(self, instance=None, owner=None):
-        return instance.__dict__[self.field_name]
+        if instance is None:
+            raise AttributeError(
+                "The '%s' attribute can only be accessed from %s instances."
+                % (self.field_name, owner.__name__))
+
+        # В value может быть черти что. Давайте гадать.
+        value = instance.__dict__[self.field_name]
+
+        # Может быть это None или само хранилище? Его и возвращаем.
+        if value is None or isinstance(value, self.attr_class):
+            return value
+
+        # Может строка? Значит она пришла из базы, потому что присвивание
+        # хранилищу строки по другим причинам не поддерживается.
+        elif isinstance(value, basestring):
+            try:
+                pattern, format = value.rsplit(';', 1)
+            except ValueError:
+                # Это какое-то испорченное значение.
+                value = None
+            else:
+                # Здесь захардкожены шоткаты хранения в базе самый популярных
+                # форматов.
+                if format == 'J':
+                    format = 'JPEG'
+                elif format == 'P':
+                    format = 'PNG'
+                value = self.attr_class(pattern, format)
+
+        # Значит это пользователь хочет сохранить картинку.
+        # Или даже загрузил файл. Джанговский или обычный.
+        elif isinstance(value, (File, file, PIL.Image.Image)):
+            if isinstance(value, (File, file)):
+                filename = value.name or 'generated_file'
+                # конвертируем в картинку
+                value = PIL.Image.open(value)
+            else:
+                # Если картинка открыта с диска, у нее будет filename
+                filename = getattr(value, 'filename', None) or 'generated'
+            file_pattern = self.field.generate_filename(instance, filename)
+            # Специальный конструктор создания изображения
+            value = self.attr_class.object_from_image(value, file_pattern)
+
+        else:
+            raise TypeError("Unknown type %s for converting to Wallet" %
+                type(value))
+
+        # Полученное значение сохраняем
+        instance.__dict__[self.field_name] = value
+        return value
 
     def __set__(self, instance, value):
+        # В большинстве случаев тип присваимого значения обрабатывается
+        # при его извлечении (__get__). Но для хранилищ проверяется
+        # совместимость при присвоении. Во-первых это дает очень быстро
+        # вытаскивать хранилища из моделей. Во-вторых, это дает уверенность,
+        # что уж если в модели хранилище, то это хранилище верного типа.
+        if isinstance(value, Wallet) and type(value) != self.attr_class:
+            # Новый патерн понадобится в любом случае.
+            file_pattern = self.field.generate_filename(instance,
+                value.path_original())
+            # Это формат, в который нужно перевести
+            format = self.attr_class.original
+            # Сначала пытаемя перенести изображение без пережатия. Конечно,
+            # на него не будут наложены фильтры оригинального формата,
+            # но оригинальный формат затем и нужен, чтобы хранить изображение,
+            # подвергшееся минимальным искажениям.
+            # Выясняем тип, в который будет преобразован оргинал.
+            file_type = format.get_file_type(value.original_file_type)
+            # Если тип тот же, что оригинальный, можно скопировать файл.
+            if file_type == value.original_file_type:
+                # Открываем файл в чужем сторадже.
+                file = value.original_storage.open(value.path_original)
+                # Расширение — первый элемент в описании типа файла.
+                extension = format.file_types[file_type][0]
+                file_name = file_pattern.format(f=ORIGINAL_FORMAT, e=extension)
+                # Копируем файл.
+                self.attr_class.original_storage.save(file_name, file)
+
+                # Файл скопирован, создаем новое хранилище с известным патерном
+                # и форматом оригинального изображения.
+                value = self.attr_class(file_pattern, file_type)
+            else:
+                # Скопирвоать не удастся, будем пересохранять.
+                image = value.load_original()
+                value = self.attr_class.object_from_image(image, file_pattern)
+        # Если же присвивается хранилище такого же типа, вроде ничего страшного
+        # не произойдет. В базе будет два указателя на один файл, или не будет,
+        # если поле уникальное. Или instance может быть совсем другой модели.
         instance.__dict__[self.field_name] = value
 
 
@@ -196,9 +283,6 @@ class WalletDescriptor(object):
         return self.__set__(instance, None)
 
 
-original_image_format = ImageFormat(jpeg_quality=95)
-
-
 class WalletField(FileField):
     attr_class = FieldWallet
     descriptor_class = WalletDescriptor
@@ -217,8 +301,9 @@ class WalletField(FileField):
         if callable(upload_to):
             self.get_directory_name = upload_to
 
+        from imagewallet import ImageFormat
         self.formats = {
-            ORIGINAL_FORMAT: original_image_format,
+            ORIGINAL_FORMAT: ImageFormat(jpeg_quality=95),
         }
         self.formats.update(formats)
         self.process_all_formats = process_all_formats
