@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from django.utils.functional import curry
-from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.core.files import File
-from django.core.files.images import get_image_dimensions
 
 import PIL
 
@@ -53,6 +49,8 @@ class ImageFormat(object):
         self.options = options
 
     def _get_options(self, prefix):
+        if not prefix.endswith('_'):
+            prefix = prefix + '_'
         return {key[len(prefix):]: value
             for key, value in self.options.iteritems()
             if key.startswith(prefix)}
@@ -66,7 +64,7 @@ class ImageFormat(object):
             return image
         # TODO: Если self.mode непрозрачный, а image.mode был прозрачным,
         # нужно под image подложить self.background
-        return image.convert(self.mode, **self._get_options('mode_'))
+        return image.convert(self.mode, **self._get_options('mode'))
 
     def process(self, image):
         """
@@ -94,7 +92,7 @@ class ImageFormat(object):
 
     def _get_save_params(self, image, file_type):
         # Опции для сохранения берутся из изображения и self.options
-        save_params = self._get_options(file_type.lower() + '_')
+        save_params = self._get_options(file_type.lower())
         if file_type == 'JPEG' and 'progression' in image.info:
             save_params.setdefault('progressive', image.info['progression'])
         return save_params

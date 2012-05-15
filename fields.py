@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import os
-import datetime
 import random
+from datetime import datetime
 
 from django.db.models.fields.files import FileField
 from django.core.files import File
@@ -10,6 +10,115 @@ from django.utils.encoding import force_unicode, smart_str
 
 from imagewallet import Wallet
 from imagewallet.wallet import ImageFormat, ORIGINAL_FORMAT
+
+
+class NewWalletDescriptor(object):
+    """
+    Дескриптор, назначаемый модели, чтобы управлять присвиваниями получениями
+    поля. Не несет смысловой нагрузки как отдельный класс, более правильно
+    было бы сделать дескриптором WalletField, но тогда он может начать вести
+    себя как дескриптор там, где нужно просто доступ к полю.
+    """
+    def __init__(self, field):
+        self.field = field
+        self.field_name = field.name
+
+    def __get__(self, instance=None, owner=None):
+        return instance.__dict__[self.field_name]
+
+    def __set__(self, instance, value):
+        instance.__dict__[self.field_name] = value
+
+
+class NewWalletField(FileField):
+    """
+    Поле для хранения в базе данных сведений о хранилищах картинок.
+    Наследование от FileField имеет смысл, потому что такие поля сохраняются
+    в последнюю очередь.
+    Attr_class создается динамически для каждого экземпляра поля со своим
+    набором форматов и других опций.
+    """
+    attr_class = None
+    attr_class_bases = (Wallet,)
+    descriptor_class = NewWalletDescriptor
+
+    # 12 случайных символов из 36 примерно соответствует 2 ** 62 вариантов
+    random_sings = 12
+    random_chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+
+    def __init__(self, verbose_name=None, name=None, upload_to='',
+            storage=None, original_storage=None, formats={}, **kwargs):
+        """
+        Upload_to — строка или функция, которая должна возвращать полное имя
+            файла с заменами {f} и {e}. Вызывается с тремя аргументами: поле,
+            объект модели, в которую будет сохранен файл и имя оригинального
+            файла. Если строка, то обозначает только директоррию. Все вхождения
+            строки '%r' заменяются на случайный символ, дальше строка
+            передается в метод strftime текущего времени. Также может содержать
+            замены {f} и {e}. Имя файла будет сгенерированно случайно.
+        Storage и original_storage — передаются в класс модели. На самом деле
+            их можно передавать через formats, но так делать не рекомендуется.
+        Formats — словарь с форматами, которые будут доступны для закачанных
+            картинок.
+        """
+        # Клонируем на всякий случай, потому что будем изменять
+        formats = dict(formats)
+        if storage is not None:
+            formats['storage'] = storage
+            # Если задан просто storage, то принимаем его за сторадж всего.
+            # Далее, если задан original_storage, он заменит просто storage.
+            formats['original_storage'] = storage
+        if original_storage is not None:
+            formats['original_storage'] = original_storage
+        # Создаем новый тип хранилищ изображений.
+        self.attr_class = type('FieldWallet', self.attr_class_bases, formats)
+
+        # Необходимо извлеч из параметров unique, потому что FileField не может
+        # быть уникальным, а WalletField может.
+        unique = kwargs.pop('unique', False)
+        super = super(NewWalletField, self)
+        super.__init__(verbose_name, name, upload_to, **kwargs)
+        # Восстанавливаем значение.
+        self._unique = unique
+
+    def get_directory_name(self):
+        dir = force_unicode(self.upload_to)
+        while '%r' in dir:
+            dir = dir.replace('%r', random.choice(self.random_chars), 1)
+        return os.path.normpath(datetime.now().strftime(dir))
+
+    def get_random_filename(self):
+        hash = "".join(random.choice(self.random_chars)
+            for _ in range(self.random_sings))
+        return hash + '_{f}.{e}'
+
+    def generate_filename(self, instance, filename):
+        """
+        Возвращает гарантированно не занятое имя файла в сторадже оригиналов.
+        """
+        dir = self.get_directory_name()
+        storage = self.attr_class.original_storage
+        while True:
+            file_pattern = os.path.join(dir, self.get_random_filename())
+            # Проверяем, что файлов с расширением среди поддерживаемых
+            # оригинальным форматом расширений, нет.
+            for info in self.attr_class.original.file_types.itervalues():
+                # Расширение — первый элемент информации о файле.
+                file_name = file_pattern.format(f=ORIGINAL_FORMAT, e=info[0])
+                if storage.exists(file_name):
+                    break
+            else:
+                # Если не было прервано, можно использовать этот паттерн.
+                return file_pattern
+
+    def south_field_triple(self):
+        "Returns a suitable description of this field for South."
+        # We'll just introspect the _actual_ field.
+        from south.modelsinspector import introspector
+        field_class = self.__class__.__module__ + "." + self.__class__.__name__
+        args, kwargs = introspector(self)
+        # That's our definition!
+        return (field_class, args, kwargs)
 
 
 class FieldWallet(Wallet):
@@ -138,7 +247,7 @@ class WalletField(FileField):
         while '%r' in upload_to:
             r = random.choice(self.random_chars)
             upload_to = upload_to.replace('%r', r, 1)
-        return os.path.normpath(force_unicode(datetime.datetime.now()
+        return os.path.normpath(force_unicode(datetime.now()
             .strftime(upload_to)))
 
     def get_filename(self, filename):
