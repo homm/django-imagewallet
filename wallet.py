@@ -4,6 +4,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 
 import PIL
+from imagewallet.filter_tools import is_transparent_image
 
 
 ORIGINAL_FORMAT = 'original'
@@ -61,10 +62,31 @@ class ImageFormat(object):
         Подготавливает изображение к наложению фильтров. Преобразует в заданный
         mode. Если необходимо, заливает фон.
         """
+        # Преобразования не требуется
         if self.mode is None or self.mode == image.mode:
             return image
-        # TODO: Если self.mode непрозрачный, а image.mode был прозрачным,
-        # нужно под image подложить self.background
+        # Если картинка прозрачная, а новый режим нет, нужно подложить фон.
+        # Причем, если новый режим — палитра, то сохранить в него
+        # полупрозрачные картинки не получится, кроме как из другой палитры.
+        # Но выше мы выше уже проверили, что режимы не совпадают,
+        # поэтому считаем палитру обычным непрозрачным форматом.
+        if is_transparent_image(image) and self.mode not in ('RGBA', 'LA'):
+            # Сложность в том, что если сначала положить фон, то он будет
+            # ограничен режимом картинки (палитра, или один канал). А если
+            # сначала сконвертировать в целевой режим, то сразу потеряем
+            # альфаканал. Поэтому нам нужен строго RGBA.
+            if image.mode != 'RGBA':
+                # Здесь конвертируем буз учета опций, потому что для RGBA
+                # они не применимы.
+                image = image.convert('RGBA')
+            # Картинка - подложка, состоящая из залитого фона.
+            bg = PIL.Image.new('RGB', image.size, self.background)
+            # Вставляем изображение. paste вставляет пикселы первого аргумента
+            # с помошью альфаканала третьего. Альфаканал первого игнорируется.
+            bg.paste(image, None, image)
+            # Теперь bg и есть искомое изображение.
+            image = bg
+        # Теперь можно спокойно конвертировать.
         return image.convert(self.mode, **self._get_options('mode'))
 
     def process(self, image):

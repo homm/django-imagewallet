@@ -58,3 +58,14 @@ def size_handler(size):
                 return lambda original: int(round(original * size))
 
     raise ValueError("Unsupported notation: %s" % size)
+
+
+def is_transparent_image(image):
+    """
+    Проверяет, является ли картинка прозрачной.
+    """
+    if image.mode in ('RGBA', 'LA'):
+        return True
+    if image.mode == 'P' and 'transparency' in image.info:
+        return True
+    return False

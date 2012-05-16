@@ -215,7 +215,7 @@ class FiltersTest(TestCase):
         self.assertEqual(method(300, 300, 195, 200), (296, 304))
 
     def test_resize(self):
-        # Создание и измнение размеров пустых картино стоит очень дешево.
+        # Создание и измнение размеров пустых картинок стоит очень дешево.
         from PIL import Image
         f = ImageFormat()
 

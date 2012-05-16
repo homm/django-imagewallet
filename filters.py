@@ -36,6 +36,7 @@ def _resize_more_or_less(more):
         else:
             width = round(height * image_width / image_height)
         return int(width), int(height)
+
     return run
 
 
