@@ -148,6 +148,23 @@ class WalletField(FileField):
         Formats — словарь с форматами, которые будут доступны для закачанных
             картинок.
         """
+        # Пустое значение не несет смысла и всегда равно null.
+        # Обратная проверка тоже была бы полезна, но south при накатывании
+        # миграций создает поле игнорируя параметр blank.
+        if kwargs.get('blank', False) and not kwargs.get('null', False):
+            raise TypeError('Blank fields should take null values.')
+
+        # Значение по-умолчанию тоже null.
+        kwargs['default'] = None
+
+        # Необходимо извлечь из параметров unique, потому что FileField
+        # не может быть уникальным, а WalletField может.
+        unique = kwargs.pop('unique', False)
+        super(WalletField, self).__init__(verbose_name, name, upload_to,
+            **kwargs)
+        # Восстанавливаем значение.
+        self._unique = unique
+
         # Клонируем на всякий случай, потому что будем изменять
         formats = dict(formats)
         if storage is not None:
@@ -159,14 +176,6 @@ class WalletField(FileField):
             formats['original_storage'] = original_storage
         # Создаем новый тип хранилищ изображений.
         self.attr_class = type('FieldWallet', self.attr_class_bases, formats)
-
-        # Необходимо извлеч из параметров unique, потому что FileField не может
-        # быть уникальным, а WalletField может.
-        unique = kwargs.pop('unique', False)
-        super(WalletField, self).__init__(verbose_name, name, upload_to,
-            **kwargs)
-        # Восстанавливаем значение.
-        self._unique = unique
 
     def pre_save(self, instance, add):
         """

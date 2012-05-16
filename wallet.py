@@ -228,6 +228,9 @@ class Wallet(object):
         self.file_pattern = file_pattern
         self.original_file_type = original_file_type
 
+    def __unicode__(self):
+        return self.path_original
+
     def __repr__(self, *args, **kwargs):
         return u"<%s '%s' %s at %s>" % (type(self).__name__,
             self.file_pattern, self.original_file_type, id(self))
