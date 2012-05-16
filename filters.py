@@ -20,9 +20,9 @@ def _not_more(width, height, image_width, image_height):
     # (ширина больше высоты), корректируем высоту в меньшую сторону.
     # Иначе ширину.
     if image_width / image_height > width / height:
-        height = width * image_height / image_width
+        height = round(width * image_height / image_width)
     else:
-        width = height * image_width / image_height
+        width = round(height * image_width / image_height)
     return int(width), int(height)
 
 
@@ -31,9 +31,9 @@ def _not_less(width, height, image_width, image_height):
     # (ширина больше высоты), корректируем ширину в большую сторону.
     # Иначе высоту.
     if image_width / image_height > width / height:
-        width = height * image_width / image_height
+        width = round(height * image_width / image_height)
     else:
-        height = width * image_height / image_width
+        height = round(width * image_height / image_width)
     return int(width), int(height)
 
 
@@ -45,7 +45,7 @@ def _square(width, height, image_width, image_height):
     # square = ratio * height * height
     height = (square / ratio) ** .5
     width = ratio * height
-    return int(width), int(height)
+    return int(round(width)), int(round(height))
 
 resize_methods = {
     'not_more': _not_more,

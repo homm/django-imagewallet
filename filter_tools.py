@@ -44,7 +44,7 @@ def size_handler(size):
             except ValueError:
                 pass
             else:
-                return lambda original: original + int(original * size)
+                return lambda original: original + int(round(original * size))
 
         # '120%' '66.666%'
         if size.endswith('%'):
@@ -54,6 +54,6 @@ def size_handler(size):
             except ValueError:
                 pass
             else:
-                return lambda original: int(original * size)
+                return lambda original: int(round(original * size))
 
     raise ValueError("Unsupported notation: %s" % size)
