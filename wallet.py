@@ -163,11 +163,11 @@ class WalletMetaclass(type):
 
         # Итерируем пользовательские свойства. items делает копию в памяти,
         # поэтому можно делать attrs.update
-        for name, format in attrs.items():
+        for format_name, format in attrs.items():
             if not isinstance(format, ImageFormat):
                 continue
             # Если находим среди них ImageFormat
-            attrs.update(make_properties(name, format))
+            attrs.update(make_properties(format_name, format))
         return super_new(cls, name, bases, attrs)
 
 
@@ -227,6 +227,10 @@ class Wallet(object):
         assert '{f}' in file_pattern
         self.file_pattern = file_pattern
         self.original_file_type = original_file_type
+
+    def __repr__(self, *args, **kwargs):
+        return u"<%s '%s' %s at %s>" % (type(self).__name__,
+            self.file_pattern, self.original_file_type, id(self))
 
     @property
     def path_original(self):
