@@ -73,6 +73,20 @@ class FiltersTest(TestCase):
 
     def test_resize_method_not_more(self):
         method = resize_methods['not_more']
+
+        # Без указания размеров
+        self.assertEqual(method(None, None, 500, 300), (500, 300))
+
+        # Задан только width
+        self.assertEqual(method(300, None, 200, 300), (300, 450))
+        self.assertEqual(method(300, None, 300, 300), (300, 300))
+        self.assertEqual(method(300, None, 400, 300), (300, 225))
+
+        # Задан только height
+        self.assertEqual(method(None, 300, 300, 200), (450, 300))
+        self.assertEqual(method(None, 300, 300, 300), (300, 300))
+        self.assertEqual(method(None, 300, 300, 400), (225, 300))
+
         # Фиксируем нужный размер, пробуем разные фотки.
         # Первая серия на уменьшение
         # Вторая не меняет размер хотя бы одного параметра
@@ -123,6 +137,20 @@ class FiltersTest(TestCase):
 
     def test_resize_method_not_less(self):
         method = resize_methods['not_less']
+
+        # Без указания размеров
+        self.assertEqual(method(None, None, 500, 300), (500, 300))
+
+        # Задан только width
+        self.assertEqual(method(300, None, 200, 300), (300, 450))
+        self.assertEqual(method(300, None, 300, 300), (300, 300))
+        self.assertEqual(method(300, None, 400, 300), (300, 225))
+
+        # Задан только height
+        self.assertEqual(method(None, 300, 300, 200), (450, 300))
+        self.assertEqual(method(None, 300, 300, 300), (300, 300))
+        self.assertEqual(method(None, 300, 300, 400), (225, 300))
+
         # Фиксируем нужный размер, пробуем разные фотки.
         # Первая серия на уменьшение
         # Вторая не меняет размер хотя бы одного параметра

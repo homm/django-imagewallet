@@ -15,44 +15,28 @@ from imagewallet.image import paste_composite, PALETTE_MODES
 from imagewallet.filter_tools import size_handler
 
 
-def _not_more(width, height, image_width, image_height):
-    # Если соотношение сторон оргинального изображения более горизонтально
-    # (ширина больше высоты), корректируем высоту в меньшую сторону.
-    # Иначе ширину.
-    if (width, height) == (None, None):
-        # Теперь мы уверены, что хоть один параметр задан
-        return image_width, image_height
-    if height is None:
-        master_width = True
-    elif width is None:
-        master_width = False
-    else:
-        master_width = image_width / image_height > width / height
-    if master_width:
-        height = round(width * image_height / image_width)
-    else:
-        width = round(height * image_width / image_height)
-    return int(width), int(height)
-
-
-def _not_less(width, height, image_width, image_height):
-    # Если соотношение сторон оргинального изображения более горизонтально
-    # (ширина больше высоты), корректируем ширину в большую сторону.
-    # Иначе высоту.
-    if (width, height) == (None, None):
-        # Теперь мы уверены, что хоть один параметр задан
-        return image_width, image_height
-    if height is None:
-        master_width = True
-    elif width is None:
-        master_width = False
-    else:
-        master_width = image_width / image_height < width / height
-    if master_width:
-        height = round(width * image_height / image_width)
-    else:
-        width = round(height * image_width / image_height)
-    return int(width), int(height)
+def _resize_more_or_less(more):
+    def run(width, height, image_width, image_height):
+        # Если соотношение сторон оргинального изображения более горизонтально
+        # (ширина больше высоты), корректируем высоту в меньшую сторону.
+        # Иначе ширину.
+        if (width, height) == (None, None):
+            # Теперь мы уверены, что хоть один параметр задан
+            return image_width, image_height
+        if height is None:
+            master_width = True
+        elif width is None:
+            master_width = False
+        else:
+            master_width = image_width / image_height > width / height
+            # Это XOR.
+            master_width = more != master_width
+        if master_width:
+            height = round(width * image_height / image_width)
+        else:
+            width = round(height * image_width / image_height)
+        return int(width), int(height)
+    return run
 
 
 def _square(width, height, image_width, image_height):
@@ -77,8 +61,8 @@ def _exactly(width, height, image_width, image_height):
 
 
 resize_methods = {
-    'not_more': _not_more,
-    'not_less': _not_less,
+    'not_more': _resize_more_or_less(more=False),
+    'not_less': _resize_more_or_less(more=True),
     'square': _square,
     'exactly': _exactly,
 }
@@ -124,191 +108,6 @@ def new_resize(width=None, height=None, method='not_more', enlarge=False,
         return image
 
     return run
-
-
-" Size method. Result image will be not more then given size"
-NOT_MORE = 'not_more'
-" Size method. Result image will be not less then given size"
-NOT_LESS = 'not_less'
-" Size method. Result image will be exact given size. Aspect ratio is not taken into account."
-EXACTLY = 'exactly'
-" Size method. Image size will be mean of NOT_MORE and NOT_LESS methods."
-MEDIAN = 'median'
-
-
-class Resize(object):
-    @classmethod
-    def method_not_more(cls, original_width, original_height, requested_width, requested_height):
-        master = None
-
-        if not requested_width:
-            master = 'height'
-        if not requested_height:
-            master = 'width'
-
-        if not master:
-            master = 'width' if (original_width / float(requested_width)) > (original_height / float(requested_height)) else 'height'
-
-        if master == 'width':
-            requested_height = original_height * requested_width / float(original_width)
-        else:
-            requested_width = original_width * requested_height / float(original_height)
-
-        return int(requested_width), int(requested_height)
-
-    @classmethod
-    def method_not_less(cls, original_width, original_height, requested_width, requested_height):
-        master = None
-
-        if not requested_width:
-            master = 'height'
-        if not requested_height:
-            master = 'width'
-
-        if not master:
-            master = 'width' if (original_width / float(requested_width)) < (original_height / float(requested_height)) else 'height'
-
-        if master == 'width':
-            requested_height = original_height * requested_width / float(original_width)
-        else:
-            requested_width = original_width * requested_height / float(original_height)
-
-        return int(requested_width), int(requested_height)
-
-    @classmethod
-    def method_exactly(cls, original_width, original_height, requested_width, requested_height):
-        if not requested_width:
-            requested_width = original_width
-        if not requested_height:
-            requested_height = original_height
-        return requested_width, requested_height
-
-    @classmethod
-    def method_median(cls, original_width, original_height, requested_width, requested_height):
-        min_width, min_height = cls.method_not_more(original_width, original_height, requested_width, requested_height)
-        max_width, max_height = cls.method_not_less(original_width, original_height, requested_width, requested_height)
-        return int((min_width + max_width) / 2), int((min_height + max_height) / 2)
-
-    METHOD_FUNCTIONS = {
-        NOT_MORE: 'method_not_more',
-        NOT_LESS: 'method_not_less',
-        EXACTLY: 'method_exactly',
-        MEDIAN: 'method_median',
-    }
-
-    def __init__(self, size, method=NOT_MORE, enlarge=False, strict_size=(False, False), align=('50%', '50%')):
-        """
-        Convert one file to another according given options.
-        Size can be one of following types:
-            tuple (10, 20)
-            string "10×20" "10x20" "10*20"
-        Any dimension can be 0 or None, what is same.
-        strict_size can be boolean or tuple of two booleans.
-        First member is strict size of width, second of height
-        """
-        self.size, self.method, self.enlarge, self.strict_size = self._parse_params(size, method, enlarge, strict_size)
-        if not isinstance(align, (tuple, list)):
-            align = (align, align)
-        self.align = align
-
-    def _parse_params(self, size, method, enlarge, strict_size):
-        if isinstance(size, basestring) and len(re.split(u'[×x*]', size)) == 2:
-            size = re.split(u'[×x*]', size, maxsplit=1)
-        elif isinstance(size, (tuple, list)) and len(size) == 2:
-            size = list(size)
-        else:
-            raise TypeError('Size have unexpected type')
-
-        if not isinstance(strict_size, (tuple, list)):
-            strict_size = (strict_size, strict_size)
-
-        if size[0] in (None, '', '?'):
-            size[0] = 0
-        if size[1] in (None, '', '?'):
-            size[1] = 0
-
-        size = map(int, size)
-
-        if method in self.METHOD_FUNCTIONS:
-            method = getattr(self, self.METHOD_FUNCTIONS[method])
-        elif callable(method):
-            pass
-        else:
-            raise TypeError('Method should be callable or constant')
-
-        return size, method, enlarge, strict_size
-
-    def __call__(self, image):
-        if not any(self.size):
-            """ if size not specified, no need do anything """
-            return image
-
-        requested_width, requested_height = self.size
-
-        new_width, new_height = self.method(image.size[0], image.size[1],
-            self.size[0], self.size[1])
-
-        if not self.enlarge:
-            if new_width > image.size[0]:
-                new_width = image.size[0]
-            if new_height > image.size[1]:
-                new_height = image.size[1]
-
-        if new_width != image.size[0] or new_height != image.size[1]:
-            image = image.resize((new_width, new_height), Image.ANTIALIAS)
-
-        if not requested_width:
-            requested_width = new_width
-        if not requested_height:
-            requested_height = new_height
-
-        if (self.strict_size[0] and new_width != requested_width) or (self.strict_size[1] and new_height != requested_height):
-            offset_x = 0
-            if self.strict_size[0]:
-                if self.align[0] is False:
-                    offset_x = requested_width - new_width
-                else:
-                    try:
-                        offset_x = int(self.align[0])
-                        if offset_x < 0:
-                            offset_x = requested_width - new_width + offset_x
-                    except:
-                        if type(self.align[0]) is str and self.align[0].rstrip('%').isdigit():
-                            offset_x = int(round((requested_width - new_width) * float(self.align[0].rstrip('%')) / 100.0))
-                        else:
-                            raise TypeError('align format not supported')
-                new_width = requested_width
-
-            offset_y = 0
-            if self.strict_size[1]:
-                if self.align[1] is False:
-                    offset_y = requested_height - new_height
-                else:
-                    try:
-                        offset_y = int(self.align[1])
-                        if offset_y < 0:
-                            offset_y = requested_height - new_height + offset_y
-                    except:
-                        if type(self.align[1]) is str and self.align[1].rstrip('%').isdigit():
-                            offset_y = int(round((requested_height - new_height) * float(self.align[1].rstrip('%')) / 100.0))
-                        else:
-                            raise TypeError('align format not supported')
-                new_height = requested_height
-
-            if image.mode in PALETTE_MODES:
-                bg = Image.new(image.mode, (new_width, new_height),
-                    image.info.get('transparency'))
-                bg.putpalette(image.getpalette())
-            else:
-                bg = Image.new(image.mode, (new_width, new_height),
-                    image.info.get('_filter_background_color', (0, 0, 0, 0)))
-            bg.paste(image, (offset_x, offset_y))
-            bg.info = image.info
-            image = bg
-
-        return image
-
-resize = Resize
 
 
 def crop(image, size, align=('50%', '50%')):
