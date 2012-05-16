@@ -244,26 +244,3 @@ class WalletField(FileField):
         args, kwargs = introspector(self)
         # That's our definition!
         return (field_class, args, kwargs)
-
-
-class OldWalletField(FileField):
-    random_chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-    random_sings = 12
-
-    def pre_save(self, model_instance, add):
-        value = model_instance.__dict__[self.name]
-        if value is None or isinstance(value, basestring):
-            # instance.__dict__ may contain string and null if no one access
-            # to field since object loading from database
-            return value
-        # in other cases it can be anything
-        return getattr(model_instance, self.attname)
-
-    def get_prep_value(self, value):
-        if value is None:
-            return None
-        value = unicode(value)
-        if not value and self.null:
-            # auto-convert empty wallets to null for null fields
-            return None
-        return value

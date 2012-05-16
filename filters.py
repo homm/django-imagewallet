@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+# Новое деление — это когда деление целых чисел дает не целое.
+from __future__ import division
+
 import re
 
 from PIL import Image
@@ -9,6 +12,89 @@ from PIL.ImageFilter import (BLUR, CONTOUR, DETAIL,  # @UnusedImport
     SMOOTH, SMOOTH_MORE, SHARPEN)  # @UnusedImport
 
 from imagewallet.image import paste_composite, PALETTE_MODES
+from imagewallet.filter_tools import size_handler
+
+
+def _not_more(width, height, image_width, image_height):
+    # Если соотношение сторон оргинального изображения более горизонтально
+    # (ширина больше высоты), корректируем высоту в меньшую сторону.
+    # Иначе ширину.
+    if image_width / image_height > width / height:
+        height = width * image_height / image_width
+    else:
+        width = height * image_width / image_height
+    return int(width), int(height)
+
+
+def _not_less(width, height, image_width, image_height):
+    # Если соотношение сторон оргинального изображения более горизонтально
+    # (ширина больше высоты), корректируем ширину в большую сторону.
+    # Иначе высоту.
+    if image_width / image_height > width / height:
+        width = height * image_width / image_height
+    else:
+        height = width * image_height / image_width
+    return int(width), int(height)
+
+
+def _square(width, height, image_width, image_height):
+    # Нужны размеры с запрошенной площадью и соотношением сторон оригинала.
+    square = width * height
+    ratio = image_width / image_height
+    # ratio = width / height, width = ratio * height
+    # square = ratio * height * height
+    height = (square / ratio) ** .5
+    width = ratio * height
+    return int(width), int(height)
+
+resize_methods = {
+    'not_more': _not_more,
+    'not_less': _not_less,
+    'square': _square,
+    'exactly': lambda width, height, w, h: (width, height),
+}
+
+
+def new_resize(width=None, height=None, method='not_more', enlarge=False,
+        resample=Image.ANTIALIAS):
+    """
+    Изменяет размеры изображения с помощью одного из четырех методов:
+    not_more — пропорциональное изменение. Картинка будет максимально размера,
+        при котором размеры не будут привышать заданные.
+    not_less — пропорциональное изменение. Картинка будет минимального размера,
+        при котором размеры будут больше заданных.
+    square — пропорциональное изменение. Картинка будет иметь площадь заданного
+        размера.
+    exactly — непропорциональное приведение к заданным размерам.
+    Любой из размеров width и height может быть не задан, что трактуется как
+    текущий размер у картинки.
+    По-умолчанию картинки только уменьшаются. Параметр enlarge разрешает
+    увеличение картинки.
+    Так же можно задать параметр resample, который передается в image.resize.
+    """
+    # Парсим параметры.
+    width_handler = size_handler(width)
+    height_handler = size_handler(height)
+    resize_method = resize_methods[method]
+
+    def run(image, format):
+        # Уже распаршеные переменные преобразуем к физическим размерам.
+        width = width_handler(image.size[0])
+        height = height_handler(image.size[1])
+
+        # Накладываем метод.
+        width, height = resize_method(width, height, *image.size)
+
+        # Следим, чтобы размер картинки не увеличился.
+        if not enlarge:
+            width = min(width, image.size[0])
+            height = min(height, image.size[1])
+
+        if (width, height) != image.size:
+            image = image.resize((width, height), resample)
+        return image
+
+    return run
 
 
 " Size method. Result image will be not more then given size"
