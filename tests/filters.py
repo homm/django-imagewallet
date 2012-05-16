@@ -113,3 +113,64 @@ class FiltersTest(TestCase):
         self.assertEqual(method(200, 300, 166, 249), (200, 300))
         self.assertEqual(method(200, 300, 162, 250), (194, 300))
 
+    def test_resize_method_not_less(self):
+        # Фиксируем нужный размер, пробуем разные фотки.
+        # Первая серия на уменьшение
+        # Вторая не меняет размер хотя бы одного параметра
+        # Третья на увеличение
+        # В серии:
+        #     Первая фотка более горизонтальная
+        #     Вторая пропорции совпадают
+        #     Третья более вертикальная
+        method = resize_methods['not_less']
+
+        # Сначала горизонтальный формат
+        self.assertEqual(method(300, 200, 460, 300), (307, 200))
+        self.assertEqual(method(300, 200, 450, 300), (300, 200))
+        self.assertEqual(method(300, 200, 440, 300), (300, 205))
+
+        self.assertEqual(method(300, 200, 310, 200), (310, 200))
+        self.assertEqual(method(300, 200, 300, 200), (300, 200))
+        self.assertEqual(method(300, 200, 300, 220), (300, 220))
+
+        self.assertEqual(method(300, 200, 190, 120), (317, 200))
+        self.assertEqual(method(300, 200, 180, 120), (300, 200))
+        self.assertEqual(method(300, 200, 170, 120), (300, 212))
+
+        # Теперь к квадрату
+        self.assertEqual(method(300, 300, 340, 330), (309, 300))
+        self.assertEqual(method(300, 300, 330, 330), (300, 300))
+        self.assertEqual(method(300, 300, 320, 330), (300, 309))
+
+        self.assertEqual(method(300, 300, 315, 300), (315, 300))
+        self.assertEqual(method(300, 300, 300, 300), (300, 300))
+        self.assertEqual(method(300, 300, 300, 315), (300, 315))
+
+        self.assertEqual(method(300, 300, 140, 130), (323, 300))
+        self.assertEqual(method(300, 300, 130, 130), (300, 300))
+        self.assertEqual(method(300, 300, 120, 130), (300, 325))
+
+        # И вертикальный формат
+        self.assertEqual(method(200, 300, 300, 430), (209, 300))
+        self.assertEqual(method(200, 300, 286, 429), (200, 300))
+        self.assertEqual(method(200, 300, 240, 430), (200, 358))
+
+        self.assertEqual(method(200, 300, 215, 300), (215, 300))
+        self.assertEqual(method(200, 300, 200, 300), (200, 300))
+        self.assertEqual(method(200, 300, 200, 315), (200, 315))
+
+        self.assertEqual(method(200, 300, 173, 250), (208, 300))
+        self.assertEqual(method(200, 300, 166, 249), (200, 300))
+        self.assertEqual(method(200, 300, 162, 250), (200, 309))
+
+    def test_resize_method_square(self):
+        method = resize_methods['square']
+        self.assertEqual(method(300, 300, 420, 400), (307, 293))
+        self.assertEqual(method(300, 300, 400, 400), (300, 300))
+        self.assertEqual(method(300, 300, 390, 400), (296, 304))
+
+        self.assertEqual(method(300, 300, 300, 300), (300, 300))
+
+        self.assertEqual(method(300, 300, 215, 200), (311, 289))
+        self.assertEqual(method(300, 300, 200, 200), (300, 300))
+        self.assertEqual(method(300, 300, 195, 200), (296, 304))
