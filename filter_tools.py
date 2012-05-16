@@ -8,7 +8,8 @@ def size_handler(size):
     значение.
     """
     if size is None:
-        return lambda original: original
+        # None — специальное значение, параметр не задан.
+        return lambda original: None
 
     try:
         # пробуем преобразовать в число

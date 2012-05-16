@@ -19,7 +19,16 @@ def _not_more(width, height, image_width, image_height):
     # Если соотношение сторон оргинального изображения более горизонтально
     # (ширина больше высоты), корректируем высоту в меньшую сторону.
     # Иначе ширину.
-    if image_width / image_height > width / height:
+    if (width, height) == (None, None):
+        # Теперь мы уверены, что хоть один параметр задан
+        return image_width, image_height
+    if height is None:
+        master_width = True
+    elif width is None:
+        master_width = False
+    else:
+        master_width = image_width / image_height > width / height
+    if master_width:
         height = round(width * image_height / image_width)
     else:
         width = round(height * image_width / image_height)
@@ -30,14 +39,25 @@ def _not_less(width, height, image_width, image_height):
     # Если соотношение сторон оргинального изображения более горизонтально
     # (ширина больше высоты), корректируем ширину в большую сторону.
     # Иначе высоту.
-    if image_width / image_height > width / height:
-        width = round(height * image_width / image_height)
+    if (width, height) == (None, None):
+        # Теперь мы уверены, что хоть один параметр задан
+        return image_width, image_height
+    if height is None:
+        master_width = True
+    elif width is None:
+        master_width = False
     else:
+        master_width = image_width / image_height < width / height
+    if master_width:
         height = round(width * image_height / image_width)
+    else:
+        width = round(height * image_width / image_height)
     return int(width), int(height)
 
 
 def _square(width, height, image_width, image_height):
+    if None in (width, height):
+        raise ValueError('Square method does not support empty dimensions.')
     # Нужны размеры с запрошенной площадью и соотношением сторон оригинала.
     square = width * height
     ratio = image_width / image_height
@@ -47,11 +67,20 @@ def _square(width, height, image_width, image_height):
     width = ratio * height
     return int(round(width)), int(round(height))
 
+
+def _exactly(width, height, image_width, image_height):
+    if width is None:
+        width = image_width
+    if height is None:
+        height = image_height
+    return width, height
+
+
 resize_methods = {
     'not_more': _not_more,
     'not_less': _not_less,
     'square': _square,
-    'exactly': lambda width, height, w, h: (width, height),
+    'exactly': _exactly,
 }
 
 
