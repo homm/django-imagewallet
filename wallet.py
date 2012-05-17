@@ -4,7 +4,6 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 
 import PIL
-from imagewallet.filter_tools import is_transparent_image
 
 
 ORIGINAL_FORMAT = 'original'
@@ -70,22 +69,38 @@ class ImageFormat(object):
         # полупрозрачные картинки не получится, кроме как из другой палитры.
         # Но выше мы выше уже проверили, что режимы не совпадают,
         # поэтому считаем палитру обычным непрозрачным форматом.
-        if is_transparent_image(image) and self.mode not in ('RGBA', 'LA'):
-            # Сложность в том, что если сначала положить фон, то он будет
-            # ограничен режимом картинки (палитра, или один канал). А если
-            # сначала сконвертировать в целевой режим, то сразу потеряем
-            # альфаканал. Поэтому нам нужен строго RGBA.
-            if image.mode != 'RGBA':
-                # Здесь конвертируем буз учета опций, потому что для RGBA
-                # они не применимы.
+        if self.mode not in ('RGBA', 'LA'):
+            # Чернобелые с альфаканалом преобразуем RGBA. Можно было бы
+            # заморочиться с извлечением L и А и передачей их в paste отдельно,
+            # что сократило бы потребление памяти.
+            if image.mode == 'LA':
+                # Конвертируем буз опций, для RGBA они не применимы.
                 image = image.convert('RGBA')
-            # Картинка - подложка, состоящая из залитого фона.
-            bg = PIL.Image.new('RGB', image.size, self.background)
-            # Вставляем изображение. paste вставляет пикселы первого аргумента
-            # с помошью альфаканала третьего. Альфаканал первого игнорируется.
-            bg.paste(image, None, image)
-            # Теперь bg и есть искомое изображение.
-            image = bg
+
+            # Тут нет else. Предыдущий случай тоже обрабатывается здесь.
+            if image.mode == 'RGBA':
+                # Картинка - подложка, состоящая из залитого фона.
+                bg = PIL.Image.new('RGB', image.size, self.background)
+                # Вставляем изображение. paste вставляет пикселы первого
+                # аргумента с помошью альфаканала третьего.
+                # Альфаканал первого игнорируется.
+                bg.paste(image, None, image)
+                # Теперь bg и есть искомое изображение.
+                image = bg
+
+        # TODO: Сделать вариант, когда палитра с прозрачностью преобразуется
+        # в RGBA или LA.
+        # С палитрой бида. Любое проебразование форматов не обратит внимание
+        # на прозрачный цвет.
+        if image.mode == 'P' and 'transparency' in image.info:
+            palette = image.getpalette()
+            # Смещение в палитре. Вообще, говоря, палитра может быть
+            # и не RGB. Если возникнут проблемы, дайте знать.
+            offset = image.info['transparency'] * 3
+            color = PIL.ImageColor.getrgb(self.background)
+            palette[offset:offset + 3] = color
+            # Кладем на место.
+            image.putpalette(palette)
         # Теперь можно спокойно конвертировать.
         return image.convert(self.mode, **self._get_options('mode'))
 
@@ -118,6 +133,9 @@ class ImageFormat(object):
         save_params = self._get_options(file_type.lower())
         if file_type == 'JPEG' and 'progression' in image.info:
             save_params.setdefault('progressive', image.info['progression'])
+        # Индекс прозрачного цвета в палитре должен выставляться вручную.
+        if image.mode == 'P' and 'transparency' in image.info:
+            save_params.setdefault('transparency', image.info['transparency'])
         return save_params
 
     def _prepare_for_save(self, image, file_type):
