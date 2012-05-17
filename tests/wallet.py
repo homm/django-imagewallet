@@ -35,6 +35,12 @@ class ImageFormatTest(TestCase):
     def test_prepare(self):
         def new(mode):
             return Image.new(mode, (4, 4))
+
+        def palette_color(image, pixel):
+            entry = image.getpixel(pixel)
+            p = image.getpalette()
+            return p[entry * 3], p[entry * 3 + 1], p[entry * 3 + 2]
+
         from PIL import Image
 
         format = ImageFormat()
@@ -66,7 +72,7 @@ class ImageFormatTest(TestCase):
         sample.putpixel((1, 2), (127, 255))
         sample.putpixel((2, 2), (255, 255))
 
-        # При преобразовании RGBA не должны меняться пиксели
+        # Полупрозрачная RGBA
         im = ImageFormat(mode='RGBA').prepare(sample)
         self.assertEqual([im.getpixel((i, 0)) for i in r3],
             [(0, 0, 0, 0), (127, 127, 127, 0), (255, 255, 255, 0)])
@@ -92,11 +98,6 @@ class ImageFormatTest(TestCase):
             [(0, 0, 128), (63, 63, 191), (127, 127, 255)])
         self.assertEqual([im.getpixel((i, 2)) for i in r3],
             [(0, 0, 0), (127, 127, 127), (255, 255, 255)])
-
-        def palette_color(image, pixel):
-            entry = image.getpixel(pixel)
-            p = image.getpalette()
-            return p[entry * 3], p[entry * 3 + 1], p[entry * 3 + 2]
 
         # При преобразовании в P по-умолчанию используется палитра WEB
         im = ImageFormat(mode='P', background='blue').prepare(sample)
@@ -132,7 +133,12 @@ class ImageFormatTest(TestCase):
 
         im = ImageFormat(mode='P', background='blue').prepare(sample)
         self.assertEqual([palette_color(im, (i, 0)) for i in range(4)],
-            [(10, 20, 30), (115, 117, 127), (255, 255, 255), (0, 0, 255)])
+            [(10, 20, 30), (115, 117, 127), (255, 255, 255), (3, 3, 3)])
+
+        im = ImageFormat(mode='RGBA', background='blue').prepare(sample)
+        self.assertEqual([im.getpixel((i, 0)) for i in range(4)],
+            [(10, 20, 30, 255), (115, 117, 127, 255), (255, 255, 255, 255),
+                (3, 3, 3, 0)])
 
     def test_process(self):
         pass
