@@ -7,9 +7,45 @@ from datetime import datetime
 from django.core.files import File
 from django.db.models.fields.files import FileField
 from django.utils.encoding import force_unicode
+from django.utils.functional import cached_property
 
 import PIL
-from imagewallet.wallet import Wallet, ORIGINAL_FORMAT
+from imagewallet.wallet import Wallet, ImageFormat, ORIGINAL_FORMAT
+
+
+class FieldWallet(Wallet):
+    """
+    Специальная версия хранилища, использующаяся в поле WalletField.
+    """
+
+    # Единственный формат по-умолчанию, оригинальное изображение.
+    # Может быть перекрыто.
+    original = ImageFormat(jpeg_quality=95)
+
+    @classmethod
+    def object_from_image(cls, image, file_pattern):
+        """
+        Создает новый объект подкласса Wallet из изображения.
+        """
+        format = cls.original
+
+        # Тип файла, которого будет оригинальное изображение.
+        original_file_type = format.get_file_type(image.format)
+        # Расширение — первый элемент в описании типа файла.
+        extension = format.file_types[original_file_type][0]
+        path_original = file_pattern.format(ext=extension)
+
+        cls._save_format(format, image, cls.original_storage, path_original)
+
+        return cls(path_original)
+
+    @cached_property
+    def url_original(self):
+        """
+        Возаврщает url до оригинального изображения. Т.к. оригинал сохраняется
+        через object_from_image, картинку можно отдавать по сети.
+        """
+        return self.original_storage.url(self.path_original)
 
 
 class WalletDescriptor(object):
@@ -65,7 +101,7 @@ class WalletDescriptor(object):
                 # Если картинка открыта с диска, у нее будет filename
                 filename = getattr(value, 'filename', None) or 'generated'
             file_pattern = self.field.generate_filename(instance, filename)
-            # Специальный конструктор создания изображения
+            # Специальный конструктор создания из изображения
             value = self.attr_class.object_from_image(value, file_pattern)
 
         else:
@@ -126,7 +162,7 @@ class WalletField(FileField):
     набором форматов и других опций.
     """
     attr_class = None
-    attr_class_bases = (Wallet,)
+    attr_class_bases = (FieldWallet,)
     descriptor_class = WalletDescriptor
 
     # 12 случайных символов из 36 примерно соответствует 2 ** 62 вариантов
@@ -174,6 +210,7 @@ class WalletField(FileField):
             formats['original_storage'] = storage
         if original_storage is not None:
             formats['original_storage'] = original_storage
+
         # Создаем новый тип хранилищ изображений.
         self.attr_class = type('FieldWallet', self.attr_class_bases, formats)
 
@@ -195,15 +232,10 @@ class WalletField(FileField):
         Конвертирует текущее содержимое поля у модели в формат, пригодный для
         сохранения в базе данных.
         """
-        # Вдруг будет нужно сохранить хранилище как раз того типа, что это поле
-        # производит (како сюрприз). Может показаться, что нужно проверять на
-        # инстанс самого Wallet. Но два хранилища разных типов даже
-        # с одинаковыми патернами, строго говоря, нельзя считать одинаковыми.
-        if type(value) == self.attr_class:
-            file_type = value.original_file_type
-            # Если возможно, сохраняем шоткатами.
-            file_type = {'JPEG': 'J', 'PNG': 'P'}.get(file_type, file_type)
-            return '{0};{1}'.format(value.file_pattern, file_type)
+        # Проверяем на FieldWallet, потому что в простом Wallet оригинальный
+        # файл может быть неподоходящего типа.
+        if isinstance(value, FieldWallet):
+            return value.path_original
         return value
 
     def get_directory_name(self):
@@ -215,7 +247,7 @@ class WalletField(FileField):
     def get_random_filename(self):
         hash = "".join(random.choice(self.random_chars)
             for _ in range(self.random_sings))
-        return hash + '_{f}.{e}'
+        return hash + '.{e}'
 
     def generate_filename(self, instance, filename):
         """
