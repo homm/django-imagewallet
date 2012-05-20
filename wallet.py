@@ -23,19 +23,25 @@ class ImageFormat(object):
     генерируются в пригодных для веба типах файлов: JPEG, или PNG.
     """
 
-    failback_file_type = 'PNG'
+    file_type = None
+    # Если исходного типа файла нет в file_types, именно эот тип будет выбран.
+    # PNG сохраняет во многих режимах и без потери качества.
+    decline_file_type = 'PNG'
     file_types = {
         'JPEG': ('.jpg', ),
         'PNG': ('.png', )
     }
 
-    def __init__(self, filters=None, file_type=None, mode=None,
-            background='white', **options):
+    def __init__(self, filters=None, file_type=None, decline_file_type='PNG',
+            mode=None, background='white', **options):
         """
         Filters — список вызываемых объектов которым передается картинка
             во время обработки.
         File_type — тип файла, может быть 'jpeg', 'png' или None. None означает
             что нужно по возможности оставить исходный формат.
+        Decline_file_type — тип файла, который будет использован только если
+            исходный тип не может быть использован. Не имеет смысла, если явно
+            задан file_type.
         Mode, в который нужно перевести изображения перед обработкой.
             None означает, что перевод не нужен.
         Background — предполагаемый фон изображения. Будет использован для
@@ -50,7 +56,10 @@ class ImageFormat(object):
         self.filters = filters or []
         self.file_type = file_type and file_type.upper()
         if file_type and self.file_type not in self.file_types:
-            raise ValueError("Not allowed file type: {}".format(file_type))
+            raise ValueError("Not allowed file type: %s" % file_type)
+        self.decline_file_type = decline_file_type.upper()
+        if self.decline_file_type not in self.file_types:
+            raise ValueError("Not allowed file type: %s" % decline_file_type)
         self.mode = mode and mode.upper()
         self.background = background
         self.options = options
@@ -143,7 +152,7 @@ class ImageFormat(object):
         if self.file_type is None:
             if original_file_type in self.file_types:
                 return original_file_type
-            return self.failback_file_type
+            return self.decline_file_type
         return self.file_type
 
     def _get_save_params(self, image, file_type):
@@ -160,7 +169,7 @@ class ImageFormat(object):
         # Каждый тип файла поддерживает свои режимы. Если картинка не такого
         # режима, нужно перевести к универсальному.
         if file_type == 'JPEG':
-            supported = ['1', 'L', 'RGB', 'RGBA', 'RGBX', 'CMYK', 'YCbCr']
+            supported = ['1', 'L', 'RGB', 'CMYK', 'YCbCr']
         elif file_type == 'PNG':
             supported = ['1', 'L', 'P', 'RGB', 'RGBA']
 
@@ -207,12 +216,17 @@ class OriginalImageFormat(ImageFormat):
     """
     Формат для сохранения оргинального типа файла.
     """
-    file_types = {'TIFF': '.tif', 'EPS': '.ps', 'PPM': '.ppm',
-        'JPEG': '.jpg', 'WMF': '.wmf'}
-    for ext, file_type in EXTENSION.iteritems():
-        # Берем типы файлов, в которые может сохранить PIL.
-        if file_type in SAVE:
-            file_types.setdefault(format, (ext, ))
+
+    @cached_property
+    def file_types(self):
+        """
+        Типы файлов получаются из типов, в которые может сохранять PIL.
+        """
+        file_types = {'TIFF': ('.tif',), 'EPS': ('.ps',), 'PPM': ('.ppm',),
+            'JPEG': ('.jpg',), 'WMF': ('.wmf',)}
+        return {file_type: file_types.get(file_type, (ext,))
+            for ext, file_type in EXTENSION.iteritems()
+            if file_type in SAVE}
 
 
 class WalletMetaclass(type):

@@ -28,7 +28,7 @@ class ToolsTest(TestCase):
         # Значение в пкселях
         with self.assertRaises(ValueError):
             # указание с пикселями без знака не подходит
-            self.assertEqual(size_handler('200px')(30), 200)
+            size_handler('200px')
         self.assertEqual(size_handler('+0px')(30), 30)
         self.assertEqual(size_handler('-0px')(-100), -100)
         self.assertEqual(size_handler('+200px')(30), 230)
@@ -201,8 +201,9 @@ class FiltersTest(TestCase):
 
     def test_resize_method_square(self):
         method = resize_methods['square']
+
         with self.assertRaises(ValueError):
-            self.assertEqual(method(300, None, 420, 400), (307, 293))
+            method(300, None, 420, 400)
 
         self.assertEqual(method(300, 300, 420, 400), (307, 293))
         self.assertEqual(method(300, 300, 400, 400), (300, 300))

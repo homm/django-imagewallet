@@ -2,10 +2,16 @@
 
 from django.test import TestCase
 
+from PIL import Image
 from imagewallet.wallet import ImageFormat, WalletMetaclass, Wallet
 
 
 class ImageFormatTest(TestCase):
+
+    def im(self, w=10, h=10, mode='RGB', info={}):
+        im = Image.new(mode, (w, h))
+        im.info.update(info)
+        return im
 
     def test_construct(self):
         with self.assertRaises(ValueError):
@@ -33,35 +39,38 @@ class ImageFormatTest(TestCase):
         self.assertEqual(format.get_file_type('JPEG'), 'JPEG')
 
     def test_prepare(self):
-        def new(mode):
-            return Image.new(mode, (4, 4))
-
         def palette_color(image, pixel):
             entry = image.getpixel(pixel)
             p = image.getpalette()
             return p[entry * 3], p[entry * 3 + 1], p[entry * 3 + 2]
 
-        from PIL import Image
-
         format = ImageFormat()
-        self.assertEqual(format.prepare(new('RGB')).mode, 'RGB')
-        self.assertEqual(format.prepare(new('LA')).mode, 'LA')
-        self.assertEqual(format.prepare(new('P')).mode, 'P')
+        self.assertEqual(format.prepare(self.im(mode='RGB')).mode, 'RGB')
+        self.assertEqual(format.prepare(self.im(mode='LA')).mode, 'LA')
+        self.assertEqual(format.prepare(self.im(mode='P')).mode, 'P')
 
         format = ImageFormat(mode='RGBA')
-        self.assertEqual(format.prepare(new('RGB')).mode, 'RGBA')
-        self.assertEqual(format.prepare(new('LA')).mode, 'RGBA')
-        self.assertEqual(format.prepare(new('P')).mode, 'RGBA')
+        self.assertEqual(format.prepare(self.im(mode='RGB')).mode, 'RGBA')
+        self.assertEqual(format.prepare(self.im(mode='LA')).mode, 'RGBA')
+        self.assertEqual(format.prepare(self.im(mode='P')).mode, 'RGBA')
 
         format = ImageFormat(mode='RgBa')
-        self.assertEqual(format.prepare(new('RGB')).mode, 'RGBA')
-        self.assertEqual(format.prepare(new('LA')).mode, 'RGBA')
-        self.assertEqual(format.prepare(new('P')).mode, 'RGBA')
+        self.assertEqual(format.prepare(self.im(mode='RGB')).mode, 'RGBA')
+        self.assertEqual(format.prepare(self.im(mode='LA')).mode, 'RGBA')
+        self.assertEqual(format.prepare(self.im(mode='P')).mode, 'RGBA')
+
+        format = ImageFormat(mode='P', mode_colors=16)
+        self.assertEqual(format.prepare(self.im(mode='RGB')).mode, 'P')
+
+        with self.assertRaises(TypeError):
+            # параметры с префиксом mode_ передаются в image.convert.
+            format = ImageFormat(mode='P', mode_unknown=666)
+            format.prepare(self.im(mode='RGB'))
 
         # Картинка с альфаканалом для теста.
         # Первый ряд полностью прозрачный, последний нет.
         r3 = range(3)
-        sample = new('LA')
+        sample = self.im(mode='LA')
         sample.putpixel((0, 0), (0, 0))
         sample.putpixel((1, 0), (127, 0))
         sample.putpixel((2, 0), (255, 0))
@@ -119,7 +128,7 @@ class ImageFormatTest(TestCase):
             [(0, 0, 0), (127, 127, 127), (255, 255, 255)])
 
         # Картинка с палитрой, где 3-й элемент прозрачный.
-        sample = new('P')
+        sample = self.im(mode='P')
         for i in range(4):
             sample.putpixel((i, 0), i)
         p = sample.getpalette()
@@ -140,14 +149,45 @@ class ImageFormatTest(TestCase):
             [(10, 20, 30, 255), (115, 117, 127, 255), (255, 255, 255, 255),
                 (3, 3, 3, 0)])
 
+        # Тут должен был быть тест на преобразование изображений с палитрой
+        # и полупрозрачностью в RGB, но PIL игнорирует альфу в 8-битных PNG.
+
     def test_process(self):
-        pass
+        format = ImageFormat([
+            lambda im, format: im.resize((im.size[0] * 2, im.size[1] * 2)),
+            lambda im, format: im.resize((im.size[0] - 10, im.size[1] - 10)),
+        ])
+        self.assertEqual(format.process(self.im(10, 10)).size, (10, 10))
+        self.assertEqual(format.process(self.im(20, 20)).size, (30, 30))
+        self.assertEqual(format.process(self.im(mode='L')).mode, 'L')
+
+        format = ImageFormat([
+            lambda im, format: im.resize((im.size[0] * 2, im.size[1] * 2)),
+            lambda im, format: im.resize((im.size[0] - 10, im.size[1] - 10)),
+        ], mode='L')
+        self.assertEqual(format.process(self.im(mode='L')).mode, 'L')
+        self.assertEqual(format.process(self.im(mode='RGB')).mode, 'L')
 
     def test_save(self):
+        function = ImageFormat()._get_save_params
+        self.assertEqual(function(self.im(), 'JPEG'), {})
+        self.assertEqual(function(self.im(), 'PNG'), {})
+        self.assertEqual(function(self.im(info={'progression': True}), 'JPEG'),
+            {'progressive': True})
+
+        opts = {'jpeg_progressive': False, 'png_optimize': True}
+        function = ImageFormat(**opts)._get_save_params
+        self.assertEqual(function(self.im(), 'JPEG'), {'progressive': False})
+        self.assertEqual(function(self.im(), 'PNG'), {'optimize': True})
+        self.assertEqual(function(self.im(info={'progression': True}), 'JPEG'),
+            {'progressive': False})
+        self.assertEqual(function(self.im(info={'transparent': 66}), 'PNG'),
+            {'optimize': True})
+        self.assertEqual(function(self.im(mode='P', info={'transparency': 66}),
+            'PNG'), {'transparency': 66, 'optimize': True})
+
         # _prepare_for_save
-        # _get_save_params
         # save
-        pass
 
 
 class WalletMetaclassTest(TestCase):
