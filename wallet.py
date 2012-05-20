@@ -1,30 +1,33 @@
 # -*- coding: utf-8 -*-
 
 import hashlib
+from os.path import splitext
 
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.utils.functional import cached_property
 
-import PIL
+from PIL import Image, ImageFile, ImageColor
+from PIL.Image import EXTENSION, SAVE
 
 
-ORIGINAL_FORMAT = 'original'
+# Загружаем все доступный кодеки. Нужно для досупа к EXTENSION
+Image.init()
 # max block size for jpeg save in PIL
 MAXBLOCK = 3200 * 2000
 
 
 class ImageFormat(object):
     """
-    Хранит информацию об обработке одного формата изображения.
-    Один формат может быть приязан к нескольким полям, поэтому не содержит
-    ссылки на поле.
+    Хранит информацию об обработке одного формата изображения. Изоражения
+    генерируются в пригодных для веба типах файлов: JPEG, или PNG.
     """
-    file_types = {
-        'JPEG': ('jpg', ),
-        'PNG': ('png', )
-    }
+
     failback_file_type = 'PNG'
+    file_types = {
+        'JPEG': ('.jpg', ),
+        'PNG': ('.png', )
+    }
 
     def __init__(self, filters=None, file_type=None, mode=None,
             background='white', **options):
@@ -85,7 +88,7 @@ class ImageFormat(object):
             # Тут нет else. Предыдущий случай тоже обрабатывается здесь.
             if image.mode == 'RGBA':
                 # Картинка - подложка, состоящая из залитого фона.
-                bg = PIL.Image.new('RGB', image.size, self.background)
+                bg = Image.new('RGB', image.size, self.background)
                 # Вставляем изображение. paste вставляет пикселы первого
                 # аргумента с помошью альфаканала третьего.
                 # Альфаканал первого игнорируется.
@@ -98,7 +101,7 @@ class ImageFormat(object):
             elif image.mode == 'P' and 'transparency' in image.info:
                 # Будем менять палитру, картинку портить нельзя.
                 image = image.copy()
-                color = PIL.ImageColor.getrgb(self.background)
+                color = ImageColor.getrgb(self.background)
                 palette = image.getpalette()
                 # Тут предполагается, что палитра в формате RGB.
                 offset = image.info['transparency'] * 3
@@ -169,8 +172,8 @@ class ImageFormat(object):
         # Если бы библиотека PIL была без приколов, тут была бы одна строчка:
         # image.save(file, format=file_type, **save_params)
         try:
-            OLD_MAXBLOCK = PIL.ImageFile.MAXBLOCK
-            PIL.ImageFile.MAXBLOCK = MAXBLOCK
+            OLD_MAXBLOCK = ImageFile.MAXBLOCK
+            ImageFile.MAXBLOCK = MAXBLOCK
             image.save(file, format=file_type, **save_params)
         except IOError:
             save_params.pop('optimize', None)
@@ -178,7 +181,7 @@ class ImageFormat(object):
             save_params.pop('progressive', None)
             image.save(file, format=file_type, **save_params)
         finally:
-            PIL.ImageFile.MAXBLOCK = OLD_MAXBLOCK
+            ImageFile.MAXBLOCK = OLD_MAXBLOCK
 
     def save(self, image, file):
         """
@@ -200,6 +203,18 @@ class ImageFormat(object):
         return image
 
 
+class OriginalImageFormat(ImageFormat):
+    """
+    Формат для сохранения оргинального типа файла.
+    """
+    file_types = {'TIFF': '.tif', 'EPS': '.ps', 'PPM': '.ppm',
+        'JPEG': '.jpg', 'WMF': '.wmf'}
+    for ext, file_type in EXTENSION.iteritems():
+        # Берем типы файлов, в которые может сохранить PIL.
+        if file_type in SAVE:
+            file_types.setdefault(format, (ext, ))
+
+
 class WalletMetaclass(type):
     def __new__(cls, name, bases, attrs):
         super_new = super(WalletMetaclass, cls).__new__
@@ -219,11 +234,9 @@ class WalletMetaclass(type):
         # Итерируем пользовательские свойства. items делает копию в памяти,
         # поэтому можно делать attrs.update
         for format_name, format in attrs.items():
-            if not isinstance(format, ImageFormat):
-                continue
-            # TODO:: А тут разве не нужно игнорировать original?
-            # Если находим среди них ImageFormat.
-            attrs.update(make_properties(format_name, format))
+            if isinstance(format, ImageFormat) and format_name != 'original':
+                # Если находим среди них ImageFormat.
+                attrs.update(make_properties(format_name, format))
         return super_new(cls, name, bases, attrs)
 
 
@@ -237,8 +250,6 @@ class Wallet(object):
 
     storage = default_storage
     original_storage = default_storage
-
-    file_path_prefix = 'walletcache/'
 
     @staticmethod
     def _save_format(format, image, storage, file_path):
@@ -274,23 +285,22 @@ class Wallet(object):
         return u"<%s '%s' at %s>" % (class_, self.path_original, id(self))
 
     @cached_property
-    def file_type_original(self):
+    def _path_info(self):
         """
-        Возвращает тип оригинального файла на основе его имени.
+        Возвращает имя оригинального файла без расширения
+        и тип этого файла по расширению.
         """
-        ext = self.path_original[-4:].lower()
-        if ext == '.png':
-            return 'PNG'
-        if ext == '.jpg' or ext == 'jpeg':
-            return 'JPEG'
-        # Остальное не интересует.
-        return None
+        # Путь равен оригиналу без расширения.
+        # Тип получается на основе расширения.
+        path, ext = splitext(self.path_original)
+        return path + '_', EXTENSION.get(ext, None)
 
     @cached_property
-    def _hash_original(self):
-        # Работает достаточно быстро: 660к генераций в секунду.
-        # Это даже не сильно медленнее "%x" % hash().
-        return hashlib.md5(self.path_original).hexdigest()
+    def url_original(self):
+        """
+        Возаврщает url до оригинального изображения.
+        """
+        return self.original_storage.url(self.path_original)
 
     def load_original(self):
         """
@@ -301,7 +311,7 @@ class Wallet(object):
         # На самом деле открытие изображения довольно быстрая операция
         # по сравнению с остальным, а память при обработке в цикле течет.
         file = self.original_storage.open(self.path_original)
-        original = PIL.Image.open(file)
+        original = Image.open(file)
         # Проблема: _get_path(), который занимается генерацией пути до разных
         # форматов, должен спросить у формата тип файла. Формату, чтобы этот
         # тип узнать, нужно знать тип файла оригинального изображения.
@@ -313,7 +323,7 @@ class Wallet(object):
         # как и оригинальная будет иметь неверное расширение. Присваивая
         # original.format тип файла, полученный из имени, мы разрываем
         # порочный круг.
-        original.format = self.file_type_original
+        original.format = self._path_info[1]
         return original
 
     def _get_path(self, name, format):
@@ -321,11 +331,10 @@ class Wallet(object):
         Возвращает путь до файла в сторадже для заданного формата.
         Используется через проперти path_<name>.
         """
-        file_type = format.get_file_type(self.file_type_original)
-        # Можно кастомизировать префикс.
-        return (self.file_path_prefix + self._hash_original + '_' +
-            # Расширение — первый элемент в описании типа файла.
-            name + '.' + format.file_types[file_type][0])
+        file_type = format.get_file_type(self._path_info[1])
+        # Расширение — первый элемент в описании типа файла.
+        extension = format.file_types[file_type][0]
+        return self._path_info[0] + name + extension
 
     def _get_url(self, name, format):
         """
@@ -346,6 +355,26 @@ class Wallet(object):
         file_path = self._get_path(name, format)
         storage = self.storage
         if storage.exists(file_path):
-            return PIL.Image.open(storage.open(file_path))
+            return Image.open(storage.open(file_path))
         return self._save_format(format, self.load_original(),
             storage, file_path)
+
+
+class HashDirWallet(Wallet):
+    """
+    Версия, которая хранить сгенерированные картинки не рядом с оригиналом,
+    а в отдельной папке и именем как хэш.
+    """
+
+    file_path_prefix = 'walletcache/'
+
+    @cached_property
+    def _path_info(self):
+        # От оригинального имени файла берется хэш.
+        # Работает достаточно быстро: 660к генераций в секунду.
+        hex = hashlib.md5(self.path_original).hexdigest()
+        # Из префикса и хэша строится путь.
+        path = (self.file_path_prefix + '%s/%s/%s_') % (hex[-2:], hex[-3], hex)
+        # Тип получается на основе расширения.
+        file_type = EXTENSION.get(splitext(self.path_original)[1], None)
+        return (path, file_type)

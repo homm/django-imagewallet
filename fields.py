@@ -7,10 +7,9 @@ from datetime import datetime
 from django.core.files import File
 from django.db.models.fields.files import FileField
 from django.utils.encoding import force_unicode
-from django.utils.functional import cached_property
 
 import PIL
-from imagewallet.wallet import Wallet, ImageFormat, ORIGINAL_FORMAT
+from imagewallet.wallet import Wallet, OriginalImageFormat
 
 
 class FieldWallet(Wallet):
@@ -20,7 +19,7 @@ class FieldWallet(Wallet):
 
     # Единственный формат по-умолчанию, оригинальное изображение.
     # Может быть перекрыто.
-    original = ImageFormat(jpeg_quality=95)
+    original = OriginalImageFormat(jpeg_quality=95)
 
     @classmethod
     def object_from_image(cls, image, file_pattern):
@@ -38,14 +37,6 @@ class FieldWallet(Wallet):
         cls._save_format(format, image, cls.original_storage, path_original)
 
         return cls(path_original)
-
-    @cached_property
-    def url_original(self):
-        """
-        Возаврщает url до оригинального изображения. Т.к. оригинал сохраняется
-        через object_from_image, картинку можно отдавать по сети.
-        """
-        return self.original_storage.url(self.path_original)
 
 
 class WalletDescriptor(object):
@@ -136,7 +127,7 @@ class WalletDescriptor(object):
                 file = value.original_storage.open(value.path_original)
                 # Расширение — первый элемент в описании типа файла.
                 extension = format.file_types[file_type][0]
-                file_name = file_pattern.format(f=ORIGINAL_FORMAT, e=extension)
+                file_name = file_pattern.format(e=extension)
                 # Копируем файл.
                 self.attr_class.original_storage.save(file_name, file)
 
@@ -247,7 +238,7 @@ class WalletField(FileField):
     def get_random_filename(self):
         hash = "".join(random.choice(self.random_chars)
             for _ in range(self.random_sings))
-        return hash + '.{e}'
+        return hash + '{e}'
 
     def generate_filename(self, instance, filename):
         """
@@ -261,7 +252,7 @@ class WalletField(FileField):
             # оригинальным форматом расширений, нет.
             for info in self.attr_class.original.file_types.itervalues():
                 # Расширение — первый элемент информации о файле.
-                file_name = file_pattern.format(f=ORIGINAL_FORMAT, e=info[0])
+                file_name = file_pattern.format(e=info[0])
                 if storage.exists(file_name):
                     break
             else:
