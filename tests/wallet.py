@@ -28,6 +28,11 @@ class ImageFormatTest(TestCase):
         self.assertEqual(format.get_file_type('PNG'), 'PNG')
         self.assertEqual(format.get_file_type('JPEG'), 'JPEG')
 
+        format = ImageFormat(decline_file_type='JPEG')
+        self.assertEqual(format.get_file_type('GIF'), 'JPEG')
+        self.assertEqual(format.get_file_type('PNG'), 'PNG')
+        self.assertEqual(format.get_file_type('JPEG'), 'JPEG')
+
         format = ImageFormat(file_type='PNG')
         self.assertEqual(format.get_file_type('GIF'), 'PNG')
         self.assertEqual(format.get_file_type('PNG'), 'PNG')
@@ -186,8 +191,37 @@ class ImageFormatTest(TestCase):
         self.assertEqual(function(self.im(mode='P', info={'transparency': 66}),
             'PNG'), {'transparency': 66, 'optimize': True})
 
-        # _prepare_for_save
-        # save
+        function = ImageFormat(**opts)._prepare_for_save
+        self.assertEqual(function(self.im(mode='P'), 'JPEG').mode, 'RGB')
+        self.assertEqual(function(self.im(mode='RGBA'), 'JPEG').mode, 'RGB')
+        self.assertEqual(function(self.im(mode='CMYK'), 'JPEG').mode, 'CMYK')
+        self.assertEqual(function(self.im(mode='P'), 'PNG').mode, 'P')
+        self.assertEqual(function(self.im(mode='RGBA'), 'PNG').mode, 'RGBA')
+        self.assertEqual(function(self.im(mode='CMYK'), 'PNG').mode, 'RGB')
+
+        import StringIO
+
+        file = StringIO.StringIO()
+        ImageFormat().save(self.im(34, 16, 'P', {'transparency': 66}), file)
+        file.seek(0)
+        im = Image.open(file)
+        self.assertEqual(im.size, (34, 16))
+        self.assertEqual(im.mode, 'P')
+        self.assertEqual(im.format, 'PNG')
+        self.assertEqual(im.info, {'transparency': 66})
+
+        file = StringIO.StringIO()
+        format = ImageFormat([
+            lambda im, format: im.resize((im.size[0] * 2, im.size[1] * 2)),
+            lambda im, format: im.resize((im.size[0] - 10, im.size[1] - 10)),
+        ], mode='L', file_type='JPEG')
+        format.save(format.process(self.im(34, 16, 'P', {'transparency': 66})),
+            file)
+        file.seek(0)
+        im = Image.open(file)
+        self.assertEqual(im.size, (58, 22))
+        self.assertEqual(im.mode, 'L')
+        self.assertEqual(im.format, 'JPEG')
 
 
 class WalletMetaclassTest(TestCase):

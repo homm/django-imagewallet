@@ -71,13 +71,16 @@ class ImageFormat(object):
             for key, value in self.options.iteritems()
             if key.startswith(prefix)}
 
-    def prepare(self, image):
+    def prepare(self, image, mode=None):
         """
         Подготавливает изображение к наложению фильтров. Преобразует в заданный
         mode. Если необходимо, заливает фон.
         """
+        if mode is None:
+            mode = self.mode
+
         # Преобразования не требуется
-        if self.mode is None or self.mode == image.mode:
+        if mode is None or mode == image.mode:
             return image
 
         # Если режим, к которому нужно преобразовать, не поддерживает
@@ -86,7 +89,7 @@ class ImageFormat(object):
         # Причем, режим с палитрой считается неподдерживающим прозрачность,
         # потому что адекватно преобразовать в него альфаканал все равно не
         # получится.
-        if self.mode not in ('RGBA', 'LA'):
+        if mode not in ('RGBA', 'LA'):
             # Черно-белые с альфаканалом преобразуем в RGBA. Можно было бы
             # заморочиться с извлечением L и А и передачей их в paste отдельно,
             # что сократило бы потребление памяти.
@@ -129,7 +132,7 @@ class ImageFormat(object):
             image.putalpha(mask)
 
         # Теперь можно конвертировать.
-        return image.convert(self.mode, **self._get_options('mode'))
+        return image.convert(mode, **self._get_options('mode'))
 
     def process(self, image):
         """
@@ -174,7 +177,7 @@ class ImageFormat(object):
             supported = ['1', 'L', 'P', 'RGB', 'RGBA']
 
         if image.mode not in supported:
-            image = image.convert('RGB')
+            image = self.prepare(image, 'RGB')
         return image
 
     def _save_to_file(self, image, file, file_type, save_params):
@@ -275,12 +278,12 @@ class Wallet(object):
 
         # накладываем фильтры
         image = format.process(image)
+        image.format = original_file_type
 
         # Сохраняем файл по тому же пути, чтобы не создавать иерархию папок.
         storage.save(file_path, ContentFile(''))
         file = storage.open(file_path, mode='wb')
         try:
-            image.format = original_file_type
             return format.save(image, file)
         finally:
             file.close()
@@ -376,7 +379,7 @@ class Wallet(object):
 
 class HashDirWallet(Wallet):
     """
-    Версия, которая хранить сгенерированные картинки не рядом с оригиналом,
+    Версия, которая хранит сгенерированные картинки не рядом с оригиналом,
     а в отдельной папке и именем как хэш.
     """
 
