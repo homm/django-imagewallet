@@ -32,7 +32,7 @@ class FieldWallet(Wallet):
         original_file_type = format.get_file_type(image.format)
         # Расширение — первый элемент в описании типа файла.
         extension = format.file_types[original_file_type][0]
-        path_original = file_pattern.format(ext=extension)
+        path_original = file_pattern.format(e=extension)
 
         cls._save_format(format, image, cls.original_storage, path_original)
 
@@ -67,19 +67,7 @@ class WalletDescriptor(object):
         # Может строка? Значит она пришла из базы, потому что присвивание
         # хранилищу строки по другим причинам не поддерживается.
         elif isinstance(value, basestring):
-            try:
-                pattern, format = value.rsplit(';', 1)
-            except ValueError:
-                # Это какое-то испорченное значение.
-                value = None
-            else:
-                # Здесь захардкожены шоткаты хранения в базе самый популярных
-                # форматов.
-                if format == 'J':
-                    format = 'JPEG'
-                elif format == 'P':
-                    format = 'PNG'
-                value = self.attr_class(pattern, format)
+            value = self.attr_class(value)
 
         # Значит это пользователь хочет сохранить картинку.
         # Или даже загрузил файл. Джанговский или обычный.
@@ -112,7 +100,7 @@ class WalletDescriptor(object):
         if isinstance(value, Wallet) and type(value) != self.attr_class:
             # Новый патерн понадобится в любом случае.
             file_pattern = self.field.generate_filename(instance,
-                value.path_original())
+                value.path_original)
             # Это формат, в который нужно перевести
             format = self.attr_class.original
             # Сначала пытаемя перенести изображение без пережатия. Конечно,
@@ -123,21 +111,22 @@ class WalletDescriptor(object):
             file_type = format.get_file_type(value.original_file_type)
             # Если тип тот же, что оригинальный, можно скопировать файл.
             if file_type == value.original_file_type:
-                # Открываем файл в чужем сторадже.
+                # Открываем файл в чужом сторадже.
                 file = value.original_storage.open(value.path_original)
                 # Расширение — первый элемент в описании типа файла.
                 extension = format.file_types[file_type][0]
-                file_name = file_pattern.format(e=extension)
+                path_original = file_pattern.format(e=extension)
                 # Копируем файл.
-                self.attr_class.original_storage.save(file_name, file)
+                original_storage = self.attr_class.original_storage
+                path_original = original_storage.save(path_original, file)
 
-                # Файл скопирован, создаем новое хранилище с известным патерном
-                # и форматом оригинального изображения.
-                value = self.attr_class(file_pattern, file_type)
+                # Файл скопирован, создаем новое хранилище.
+                value = self.attr_class(path_original)
             else:
                 # Скопирвоать не удастся, будем пересохранять.
                 image = value.load_original()
                 value = self.attr_class.object_from_image(image, file_pattern)
+
         # Если же присвивается хранилище такого же типа, вроде ничего страшного
         # не произойдет. В базе будет два указателя на один файл, или не будет,
         # если поле уникальное. Или instance может быть совсем другой модели.
