@@ -2,8 +2,6 @@
 
 from PIL import Image, ImageMath
 
-PALETTE_MODES = ('P',)
-
 
 def paste_composite(original, paste):
     # this faster then split()[-1]

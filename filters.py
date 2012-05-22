@@ -4,12 +4,10 @@
 from __future__ import division
 
 from PIL import Image
-from PIL.ImageColor import getrgb
 from PIL.ImageFilter import (BLUR, CONTOUR, DETAIL,  # @UnusedImport
     EDGE_ENHANCE, EDGE_ENHANCE_MORE, EMBOSS, FIND_EDGES,  # @UnusedImport
     SMOOTH, SMOOTH_MORE, SHARPEN)  # @UnusedImport
 
-from imagewallet.image import paste_composite, PALETTE_MODES
 from imagewallet.filter_tools import size_handler
 
 
@@ -150,85 +148,3 @@ def crop(width=None, height=None, halign='50%', valign='50%', background=None):
         return new
 
     return run
-
-
-def background(image, color):
-    if not isinstance(color, tuple) or len(color) != 4 or color[3] != 0:
-        if image.mode in PALETTE_MODES:
-            if 'transparency' in image.info:
-                if not isinstance(color, tuple):
-                    color = getrgb(color)
-
-                trans = image.info['transparency']
-                del image.info['transparency']
-
-                palette = image.getpalette()
-                palette[trans * 3 + 0] = color[0]
-                palette[trans * 3 + 1] = color[1]
-                palette[trans * 3 + 2] = color[2]
-                image.putpalette(palette)
-
-        else:
-            bg = Image.new(image.mode, image.size, color)
-            bg.info = image.info
-
-            if image.mode in ('RGBA', 'LA'):
-                if isinstance(color, tuple) and len(color) == 4:
-                    # semitransparent background
-                    paste_composite(bg, image)
-                else:
-                    # solid background
-                    bg = bg.convert(image.mode[:-1])
-                    bg.paste(image.convert(image.mode[:-1]), (0, 0), image)
-            else:
-                bg.paste(image, (0, 0))
-            image = bg
-
-    image.info['_filter_background_color'] = color
-    return image
-
-
-def ambilight(image, size, scale=0.9, blur=5, crop=4):
-    bg = image.resize((size[0] + crop * 2, size[1] + crop * 2), Image.ANTIALIAS)
-    bg = filter(bg, BLUR, blur).crop((crop, crop, bg.size[0] - crop,
-        bg.size[1] - crop))
-    image.thumbnail(tuple([int(s * scale) for s in size]), Image.ANTIALIAS)
-    bg.paste(image, tuple([int((size[i] - image.size[i]) / 2) for i in [0, 1]]))
-    return bg
-
-
-def convert(image, format):
-    return image.convert(format)
-
-
-def filter(image, filter, strength=1):
-    while strength >= 1:
-        image = image.filter(filter)
-        strength -= 1
-    if strength == 0:
-        return image
-    else:
-        return Image.blend(image, image.filter(filter), strength)
-
-
-def colorize(image, color='#fff', alpha=0.5):
-    return Image.blend(image, Image.new(image.mode, image.size, color), alpha)
-
-
-def minimize(image):
-    return image
-
-
-def quality(image, quality):
-    image.info['quality'] = quality
-    return image
-
-
-def progressive(image):
-    image.info['progressive'] = True
-    return image
-
-
-def optimize(image):
-    image.info['optimize'] = True
-    return image

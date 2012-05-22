@@ -200,7 +200,7 @@ class WalletField(FileField):
         # Если всегда честно выполнять getattr, то при сохранении объекта,
         # в котором есть хранилище изображений, но к которому не обращались,
         # будет происходить это самое обращение, а знаит загрузка.
-        # Поэтому пропускам как есть строки и None.
+        # Поэтому передаем строки и None без изменений.
         value = instance.__dict__[self.name]
         if value is None or isinstance(value, basestring):
             return value
