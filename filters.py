@@ -69,7 +69,7 @@ resize_methods = {
 }
 
 
-def new_resize(width=None, height=None, method='not_more', enlarge=False,
+def resize(width=None, height=None, method='not_more', enlarge=False,
         resample=Image.ANTIALIAS):
     """
     Изменяет размеры изображения с помощью одного из четырех методов:

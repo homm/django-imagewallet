@@ -4,7 +4,7 @@ from django.test import TestCase
 
 from imagewallet.wallet import ImageFormat
 from imagewallet.filter_tools import size_handler
-from imagewallet.filters import resize_methods, new_resize
+from imagewallet.filters import resize_methods, resize
 
 
 class ToolsTest(TestCase):
@@ -224,57 +224,57 @@ class FiltersTest(TestCase):
             return Image.new('1', args)
 
         # Всегда должен давать исходный размер
-        resizer = new_resize()
+        resizer = resize()
         self.assertEqual(resizer(img(40, 50), f).size, (40, 50))
         self.assertEqual(resizer(img(50, 50), f).size, (50, 50))
         self.assertEqual(resizer(img(60, 50), f).size, (60, 50))
 
         # Непропорционально уменьшить ширину до 50
-        resizer = new_resize(width=50, method='exactly')
+        resizer = resize(width=50, method='exactly')
         self.assertEqual(resizer(img(40, 50), f).size, (40, 50))
         self.assertEqual(resizer(img(50, 50), f).size, (50, 50))
         self.assertEqual(resizer(img(60, 50), f).size, (50, 50))
 
         # Пропорционально уменьшить до ширины 50
-        resizer = new_resize(width=50)
+        resizer = resize(width=50)
         self.assertEqual(resizer(img(40, 50), f).size, (40, 50))
         self.assertEqual(resizer(img(50, 50), f).size, (50, 50))
         self.assertEqual(resizer(img(60, 50), f).size, (50, 42))
 
         # Пропорционально уменьшить до высоты 50
-        resizer = new_resize(height=50)
+        resizer = resize(height=50)
         self.assertEqual(resizer(img(50, 40), f).size, (50, 40))
         self.assertEqual(resizer(img(50, 50), f).size, (50, 50))
         self.assertEqual(resizer(img(50, 60), f).size, (42, 50))
 
         # Пропорционально изменяет размер до высоты 50
-        resizer = new_resize(height=50, enlarge=True)
+        resizer = resize(height=50, enlarge=True)
         self.assertEqual(resizer(img(51, 40), f).size, (64, 50))
         self.assertEqual(resizer(img(50, 50), f).size, (50, 50))
         self.assertEqual(resizer(img(50, 60), f).size, (42, 50))
 
         # Пропорционально изменяет размер до высоты 50, другой метод
-        resizer = new_resize(height=50, method='not_less', enlarge=True)
+        resizer = resize(height=50, method='not_less', enlarge=True)
         self.assertEqual(resizer(img(51, 40), f).size, (64, 50))
         self.assertEqual(resizer(img(50, 50), f).size, (50, 50))
         self.assertEqual(resizer(img(50, 60), f).size, (42, 50))
 
         # Пропорционально уменьшение до 50%
-        resizer = new_resize('66.6%', '50%')
+        resizer = resize('66.6%', '50%')
         self.assertEqual(resizer(img(40, 40), f).size, (20, 20))
 
         # Пропорционально уменьшение до 66.6%
-        resizer = new_resize('66.6%', '50%', method='not_less')
+        resizer = resize('66.6%', '50%', method='not_less')
         self.assertEqual(resizer(img(40, 40), f).size, (27, 27))
 
         # +20% вносит больший вклад и в конце +10px ограничивает больше
-        resizer = new_resize('+10px', '+20%', enlarge=True)
+        resizer = resize('+10px', '+20%', enlarge=True)
         self.assertEqual(resizer(img(40, 40), f).size, (48, 48))
         self.assertEqual(resizer(img(50, 50), f).size, (60, 60))
         self.assertEqual(resizer(img(60, 60), f).size, (70, 70))
 
         # +20% вносит больший вклад и в конце +10px ограничивает больше
-        resizer = new_resize('+10px', '+20%', method='not_less', enlarge=True)
+        resizer = resize('+10px', '+20%', method='not_less', enlarge=True)
         self.assertEqual(resizer(img(40, 40), f).size, (50, 50))
         self.assertEqual(resizer(img(50, 50), f).size, (60, 60))
         self.assertEqual(resizer(img(60, 60), f).size, (72, 72))
