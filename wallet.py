@@ -219,17 +219,15 @@ class OriginalImageFormat(ImageFormat):
     """
     Формат для сохранения оргинального типа файла.
     """
-
-    @cached_property
-    def file_types(self):
-        """
-        Типы файлов получаются из типов, в которые может сохранять PIL.
-        """
-        file_types = {'TIFF': ('.tif',), 'EPS': ('.ps',), 'PPM': ('.ppm',),
-            'JPEG': ('.jpg',), 'WMF': ('.wmf',)}
-        return {file_type: file_types.get(file_type, (ext,))
-            for ext, file_type in EXTENSION.iteritems()
-            if file_type in SAVE}
+    # Типы файлов получаются из типов, в которые может сохранять PIL.
+    # Для типов, у которых может быть много расширений, но есть одно
+    # общеупотребимое, оно задаются явно.
+    file_types = {'TIFF': ('.tif',), 'EPS': ('.eps',), 'PPM': ('.ppm',),
+        'JPEG': ('.jpg',), 'WMF': ('.wmf',)}
+    for _extension, _file_type in EXTENSION.iteritems():
+        if _file_type in SAVE:
+            file_types.setdefault(_file_type, (_extension,))
+    del _extension, _file_type
 
 
 class WalletMetaclass(type):
@@ -254,6 +252,9 @@ class WalletMetaclass(type):
             if isinstance(format, ImageFormat) and format_name != 'original':
                 # Если находим среди них ImageFormat.
                 attrs.update(make_properties(format_name, format))
+
+        if 'storage' in attrs:
+            attrs.setdefault('original_storage', attrs['storage'])
         return super_new(cls, name, bases, attrs)
 
 
@@ -391,7 +392,7 @@ class HashDirWallet(Wallet):
         # Работает достаточно быстро: 660к генераций в секунду.
         hex = hashlib.md5(self.path_original).hexdigest()
         # Из префикса и хэша строится путь.
-        path = (self.file_path_prefix + '%s/%s/%s_') % (hex[-2:], hex[-3], hex)
+        path = self.file_path_prefix + '%s/%s/%s_' % (hex[-2:], hex[-3], hex)
         # Тип получается на основе расширения.
         file_type = EXTENSION.get(splitext(self.path_original)[1], None)
         return (path, file_type)

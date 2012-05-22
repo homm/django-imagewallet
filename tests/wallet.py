@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
 
+import types
+import StringIO
+
 from django.test import TestCase
+from django.core.files.storage import default_storage
 
 from PIL import Image
-from imagewallet.wallet import ImageFormat, WalletMetaclass, Wallet
+from imagewallet.tests.storage import DictStorage
+from imagewallet.wallet import ImageFormat, OriginalImageFormat
+from imagewallet.wallet import Wallet, HashDirWallet
 
 
 class ImageFormatTest(TestCase):
@@ -27,6 +33,13 @@ class ImageFormatTest(TestCase):
         self.assertEqual(format.get_file_type('GIF'), 'PNG')
         self.assertEqual(format.get_file_type('PNG'), 'PNG')
         self.assertEqual(format.get_file_type('JPEG'), 'JPEG')
+
+        format = OriginalImageFormat()
+        self.assertEqual(format.get_file_type('GIF'), 'GIF')
+        self.assertEqual(format.get_file_type('PNG'), 'PNG')
+        self.assertEqual(format.get_file_type('JPEG'), 'JPEG')
+        self.assertEqual(format.get_file_type('TIFF'), 'TIFF')
+        self.assertEqual(format.get_file_type('EPS'), 'EPS')
 
         format = ImageFormat(decline_file_type='JPEG')
         self.assertEqual(format.get_file_type('GIF'), 'JPEG')
@@ -199,8 +212,6 @@ class ImageFormatTest(TestCase):
         self.assertEqual(function(self.im(mode='RGBA'), 'PNG').mode, 'RGBA')
         self.assertEqual(function(self.im(mode='CMYK'), 'PNG').mode, 'RGB')
 
-        import StringIO
-
         file = StringIO.StringIO()
         ImageFormat().save(self.im(34, 16, 'P', {'transparency': 66}), file)
         file.seek(0)
@@ -225,10 +236,59 @@ class ImageFormatTest(TestCase):
 
 
 class WalletMetaclassTest(TestCase):
+
+    def im(self, w=10, h=10, mode='RGB', info={}):
+        im = Image.new(mode, (w, h))
+        im.info.update(info)
+        return im
+
     def test_construct(self):
-        WalletMetaclass
+        TW = type('TW', (Wallet,), {
+            'original_storage': DictStorage(),
+        })
+        self.assertEqual(TW.storage, default_storage)
+        self.assertEqual(type(TW.original_storage), DictStorage)
+
+        TW = type('TW', (Wallet,), {
+            'storage': DictStorage(),
+            'original_storage': DictStorage(),
+        })
+        self.assertEqual(type(TW.storage), DictStorage)
+        self.assertEqual(type(TW.original_storage), DictStorage)
+        self.assertNotEqual(TW.storage, TW.original_storage)
+
+        TW = type('TW', (Wallet,), {
+            'original': ImageFormat(),
+            'small': ImageFormat(),
+            'storage': DictStorage(),
+        })
+        self.assertEqual(type(TW.storage), DictStorage)
+        self.assertEqual(type(TW.original_storage), DictStorage)
+        self.assertEqual(TW.storage, TW.original_storage)
+
+        self.assertEqual(type(TW.path_small), property)
+        self.assertEqual(type(TW.url_small), property)
+        self.assertEqual(type(TW.load_small), types.MethodType)
+
+        with self.assertRaises(AttributeError):
+            TW.path_original
+        with self.assertRaises(KeyError):
+            TW.__dict__['url_original']
+        self.assertEqual(TW.load_original, Wallet.load_original)
 
 
 class WalletTest(TestCase):
+
+    def im(self, w=10, h=10, mode='RGB', info={}):
+        im = Image.new(mode, (w, h))
+        im.info.update(info)
+        return im
+
     def test_construct(self):
+#        self.im(66, 22).save(TW.storage.open('file.jpg'), format='JPEG')
+#
+#        self.assertEqual(TW('file.jpg').path_small, 'file_small.jpg')
+#        self.assertEqual(TW('file.jpg').url_small, '/file_small.jpg')
+#        self.assertEqual(TW('file.jpg').load_small().size, (66, 22))
         Wallet
+        HashDirWallet
