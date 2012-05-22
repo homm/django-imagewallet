@@ -7,8 +7,9 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.utils.functional import cached_property
 
-from PIL import Image, ImageFile, ImageColor
+from PIL import Image, ImageFile
 from PIL.Image import EXTENSION, SAVE
+from imagewallet.filters import convert
 
 
 # Загружаем все доступный кодеки. Нужно для досупа к EXTENSION
@@ -71,68 +72,13 @@ class ImageFormat(object):
             for key, value in self.options.iteritems()
             if key.startswith(prefix)}
 
-    def prepare(self, image, mode=None):
+    def prepare(self, image):
         """
-        Подготавливает изображение к наложению фильтров. Преобразует в заданный
-        mode. Если необходимо, заливает фон.
+        Подготавливает изображение к наложению фильтров.
         """
-        if mode is None:
-            mode = self.mode
-
-        # Преобразования не требуется
-        if mode is None or mode == image.mode:
-            return image
-
-        # Если режим, к которому нужно преобразовать, не поддерживает
-        # прозрачность, а исходное изображение в одном из режимов,
-        # поддерживающих, нужны подложить под прозрачные пиксели фон.
-        # Причем, режим с палитрой считается неподдерживающим прозрачность,
-        # потому что адекватно преобразовать в него альфаканал все равно не
-        # получится.
-        if mode not in ('RGBA', 'LA'):
-            # Черно-белые с альфаканалом преобразуем в RGBA. Можно было бы
-            # заморочиться с извлечением L и А и передачей их в paste отдельно,
-            # что сократило бы потребление памяти.
-            if image.mode == 'LA':
-                # Конвертируем без опций, для RGBA они не применимы.
-                image = image.convert('RGBA')
-
-            # Тут нет else. Предыдущий случай тоже обрабатывается здесь.
-            if image.mode == 'RGBA':
-                # Картинка - подложка, состоящая из залитого фона.
-                bg = Image.new('RGB', image.size, self.background)
-                # Вставляем изображение. paste вставляет пикселы первого
-                # аргумента с помошью альфаканала третьего.
-                # Альфаканал первого игнорируется.
-                bg.paste(image, None, image)
-                # Теперь bg и есть искомое изображение.
-                image = bg
-
-            # Палитру не нужно смешивать, достаточно заменить цвет, указанный
-            # как прозрачный на цвет фона.
-            elif image.mode == 'P' and 'transparency' in image.info:
-                # Будем менять палитру, картинку портить нельзя.
-                image = image.copy()
-                color = ImageColor.getrgb(self.background)
-                palette = image.getpalette()
-                # Тут предполагается, что палитра в формате RGB.
-                offset = image.info['transparency'] * 3
-                palette[offset:offset + 3] = color
-                # Кладем на место.
-                image.putpalette(palette)
-
-        # С палитрой бида. Если преобразовывать из нее в формат, поддерживающий
-        # прозрачность, прозрачный цвет палитры становится непрозрачным.
-        elif image.mode == 'P' and 'transparency' in image.info:
-            # Из прозрачного цвета нужно получить маску.
-            mask = image.convert('L').point(lambda i:
-                0 if i == image.info['transparency'] else 255)
-            # Конвертируем без опций, для RGBA они не применимы.
-            image = image.convert('RGBA')
-            image.putalpha(mask)
-
-        # Теперь можно конвертировать.
-        return image.convert(mode, **self._get_options('mode'))
+        options = self._get_options('mode')
+        filter = convert(self.mode, self.background, **options)
+        return filter(image, self)
 
     def process(self, image):
         """
@@ -177,7 +123,7 @@ class ImageFormat(object):
             supported = ['1', 'L', 'P', 'RGB', 'RGBA']
 
         if image.mode not in supported:
-            image = self.prepare(image, 'RGB')
+            image = convert('RGB', self.background)(image, self)
         return image
 
     def _save_to_file(self, image, file, file_type, save_params):

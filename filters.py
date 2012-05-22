@@ -3,7 +3,7 @@
 # Новое деление — это когда деление целых чисел дает не целое.
 from __future__ import division
 
-from PIL import Image
+from PIL import Image, ImageColor
 from PIL.ImageFilter import (BLUR, CONTOUR, DETAIL,  # @UnusedImport
     EDGE_ENHANCE, EDGE_ENHANCE_MORE, EMBOSS, FIND_EDGES,  # @UnusedImport
     SMOOTH, SMOOTH_MORE, SHARPEN)  # @UnusedImport
@@ -42,7 +42,7 @@ def _square(width, height, image_width, image_height):
     # Нужны размеры с запрошенной площадью и соотношением сторон оригинала.
     square = width * height
     ratio = image_width / image_height
-    # ratio = width / height, width = ratio * height
+    # ratio = width / height => width = ratio * height
     # square = ratio * height * height
     height = (square / ratio) ** .5
     width = ratio * height
@@ -85,7 +85,7 @@ def resize(width=None, height=None, method='not_more', enlarge=False,
     # Парсим параметры.
     width_handler = size_handler(width)
     height_handler = size_handler(height)
-    resize_method = resize_methods[method]
+    resize_method = method if callable(method) else resize_methods[method]
 
     def run(image, format):
         # Уже распаршеные переменные преобразуем к физическим размерам.
@@ -146,5 +146,70 @@ def crop(width=None, height=None, halign='50%', valign='50%', background=None):
         new.paste(image, box)
         new.info = image.info.copy()
         return new
+
+    return run
+
+
+def convert(mode='RGB', background='white', data=None, dither=None,
+        palette=Image.WEB, colors=256):
+    """
+    Преобразует изображение в заданный режим. Если необходимо, заливает фон.
+    """
+    background = ImageColor.getrgb(background)
+
+    def run(image, format):
+        # Преобразования не требуется
+        if mode is None or mode == image.mode:
+            return image
+
+        # Если режим, к которому нужно преобразовать, не поддерживает
+        # прозрачность, а исходное изображение в одном из режимов,
+        # поддерживающих, нужны подложить под прозрачные пиксели фон.
+        # Причем, режим с палитрой считается неподдерживающим прозрачность,
+        # потому что адекватно преобразовать в него альфаканал все равно не
+        # получится.
+        if mode not in ('RGBA', 'LA'):
+            # Черно-белые с альфаканалом преобразуем в RGBA. Можно было бы
+            # заморочиться с извлечением L и А и передачей их в paste отдельно,
+            # что сократило бы потребление памяти.
+            if image.mode == 'LA':
+                # Конвертируем без опций, для RGBA они не применимы.
+                image = image.convert('RGBA')
+
+            # Тут нет else. Предыдущий случай тоже обрабатывается здесь.
+            if image.mode == 'RGBA':
+                # Картинка - подложка, состоящая из залитого фона.
+                bg = Image.new('RGB', image.size, background)
+                # Вставляем изображение. paste вставляет пикселы первого
+                # аргумента с помошью альфаканала третьего.
+                # Альфаканал первого игнорируется.
+                bg.paste(image, None, image)
+                # Теперь bg и есть искомое изображение.
+                image = bg
+
+            # Палитру не нужно смешивать, достаточно заменить цвет, указанный
+            # как прозрачный на цвет фона.
+            elif image.mode == 'P' and 'transparency' in image.info:
+                # Будем менять палитру, картинку портить нельзя.
+                image = image.copy()
+                image_palette = image.getpalette()
+                # Тут предполагается, что палитра в формате RGB.
+                offset = image.info['transparency'] * 3
+                image_palette[offset:offset + 3] = background
+                # Кладем на место.
+                image.putpalette(image_palette)
+
+        # С палитрой бида. Если преобразовывать из нее в формат, поддерживающий
+        # прозрачность, прозрачный цвет палитры становится непрозрачным.
+        elif image.mode == 'P' and 'transparency' in image.info:
+            # Из прозрачного цвета нужно получить маску.
+            mask = image.convert('L').point(lambda i:
+                0 if i == image.info['transparency'] else 255)
+            # Конвертируем без опций, для RGBA они не применимы.
+            image = image.convert('RGBA')
+            image.putalpha(mask)
+
+        # Теперь можно конвертировать.
+        return image.convert(mode, data, dither, palette, colors)
 
     return run
