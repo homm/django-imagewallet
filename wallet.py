@@ -233,11 +233,8 @@ class OriginalImageFormat(ImageFormat):
 class WalletMetaclass(type):
     def __new__(cls, name, bases, attrs):
         super_new = super(WalletMetaclass, cls).__new__
-        parents = [b for b in bases if isinstance(b, WalletMetaclass)]
-        if not parents:
-            # If this isn't a subclass of Model, don't do anything special.
-            return super_new(cls, name, bases, attrs)
 
+        # Одно замыкание на все три функции.
         def make_properties(name, format):
             get_path = lambda self: Wallet._get_path(self, name, format)
             get_url = lambda self: Wallet._get_url(self, name, format)
@@ -255,6 +252,7 @@ class WalletMetaclass(type):
 
         if 'storage' in attrs:
             attrs.setdefault('original_storage', attrs['storage'])
+
         return super_new(cls, name, bases, attrs)
 
 
