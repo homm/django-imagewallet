@@ -3,8 +3,6 @@
 # Новое деление — это когда деление целых чисел дает не целое.
 from __future__ import division
 
-import re
-
 from PIL import Image
 from PIL.ImageColor import getrgb
 from PIL.ImageFilter import (BLUR, CONTOUR, DETAIL,  # @UnusedImport
@@ -111,55 +109,47 @@ def resize(width=None, height=None, method='not_more', enlarge=False,
     return run
 
 
-def crop(image, size, align=('50%', '50%')):
-    if isinstance(size, basestring) and len(re.split(u'[×x*]', size)) == 2:
-        size = re.split(u'[×x*]', size, maxsplit=1)
-    elif isinstance(size, (tuple, list)) and len(size) == 2:
-        size = list(size)
-    else:
-        raise TypeError('Size have unexpected type')
+def crop(width=None, height=None, halign='50%', valign='50%', background=None):
+    """
+    Задает изображению нужные размеры. Может использоваться как для обрезания,
+    так и для задания полей. Преметры width и height задают размеры. Любой из
+    них может быть не укзан, тогда данный рахмер изменене не будет. Пераметры
+    halign и valign задают расположение исходного изображения в новом. Если
+    размеры увеличиваются и режим изображения не поддерживает прозрачность,
+    пустое место заливается цветом background. Если этот цвет не задан, берется
+    цвет background у формата.
+    """
+    # Парсим параметры.
+    width_handler = size_handler(width)
+    height_handler = size_handler(height)
+    halign_handler = size_handler(halign)
+    valign_handler = size_handler(valign)
 
-    if size[0] in (None, '', '?'):
-        size[0] = image.size[0]
-    if size[1] in (None, '', '?'):
-        size[1] = image.size[1]
+    def run(image, format):
+        # Уже распаршеные переменные преобразуем к физическим размерам.
+        # None становится текущим размером.
+        size = (width_handler(image.size[0]) or image.size[0],
+            height_handler(image.size[1]) or image.size[1])
 
-    size = map(int, size)
-
-    offset = [0, 0]
-    # фильтр не может увеличивать изображения
-    for i in (0, 1):
-        if size[i] >= image.size[i]:
-            size[i] = image.size[i]
-            continue
-        try:
-            int(align[i])
-        except TypeError:
-            # False или None
-            offset[i] = size[0] - image.size[i]
-        except ValueError:
-            # с процентами
-            a = float(align[i].rstrip('%'))
-            offset[i] = int(round((size[i] - image.size[i]) * a / 100.0))
+        # Для прозрачных не нужно указывать фон.
+        if image.mode in ['RGBA', 'LA']:
+            new = Image.new(image.mode, size)
+        elif image.mode == 'P' and 'transparency' in image.info:
+            new = Image.new(image.mode, size, image.info['transparency'])
+            new.putpalette(image.getpalette())
         else:
-            # число
-            offset[i] = int(align[i])
+            if background is None:
+                new = Image.new(image.mode, size, format.background)
+            else:
+                new = Image.new(image.mode, size, background)
 
-    if image.mode in PALETTE_MODES:
-        bg = Image.new(image.mode, size, image.info.get('transparency'))
-        bg.putpalette(image.getpalette())
-    else:
-        bg = Image.new(image.mode, size,
-            image.info.get('_filter_background_color', (0, 0, 0, 0)))
+        box = (halign_handler(size[0] - image.size[0]),
+            valign_handler(size[1] - image.size[1]))
+        new.paste(image, box)
+        new.info = image.info.copy()
+        return new
 
-    bg.paste(image, tuple(offset))
-    bg.info = image.info
-    image = bg
-    return image
-
-
-def padding():
-    pass
+    return run
 
 
 def background(image, color):
