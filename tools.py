@@ -21,6 +21,7 @@ def collect_fields(includes=[], klass=None):
                             yield field
                             break
 
+
 def collect_wallets(fields, klass=Wallet):
     for field in fields:
         model = field.model

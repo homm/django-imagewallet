@@ -176,40 +176,7 @@ class OriginalImageFormat(ImageFormat):
     del _extension, _file_type
 
 
-class WalletMetaclass(type):
-    def __new__(cls, name, bases, attrs):
-        super_new = super(WalletMetaclass, cls).__new__
-
-        # Одно замыкание на все три функции.
-        def make_properties(name, format):
-            get_path = lambda self: Wallet._get_path(self, name, format)
-            get_url = lambda self: Wallet._get_url(self, name, format)
-            load_format = lambda self: Wallet._load_format(self, name, format)
-            return {'path_' + name: property(get_path),
-                'url_' + name: property(get_url),
-                'load_' + name: load_format}
-
-        # Итерируем пользовательские свойства. items делает копию в памяти,
-        # поэтому можно делать attrs.update
-        for format_name, format in attrs.items():
-            if isinstance(format, ImageFormat) and format_name != 'original':
-                # Если находим среди них ImageFormat.
-                attrs.update(make_properties(format_name, format))
-
-        if 'storage' in attrs:
-            attrs.setdefault('original_storage', attrs['storage'])
-
-        return super_new(cls, name, bases, attrs)
-
-
-class Wallet(object):
-    """
-    Объекты хранилищ похожи на модели в django. Для каждого набора форматов
-    нужно отнаследоваться от класса Wallet и объявить экземпляры ImageFormat
-    как его элементы.
-    """
-    __metaclass__ = WalletMetaclass
-
+class BaseWallet():
     storage = default_storage
     original_storage = default_storage
 
@@ -322,6 +289,46 @@ class Wallet(object):
             storage, file_path)
 
 
+class WalletMetaclass(type):
+    """
+    Управляет созданием хранилищь. Для кажого объявленногофвормата создает
+    свойства path_<format> и url_<format>, а так же метод load_<format>.
+    """
+
+    def __new__(cls, name, bases, attrs):
+        super_new = super(WalletMetaclass, cls).__new__
+
+        # Одно замыкание на все три функции.
+        def make_properties(name, format):
+            get_path = lambda self: Wallet._get_path(self, name, format)
+            get_url = lambda self: Wallet._get_url(self, name, format)
+            load_format = lambda self: Wallet._load_format(self, name, format)
+            return {'path_' + name: property(get_path),
+                'url_' + name: property(get_url),
+                'load_' + name: load_format}
+
+        # Итерируем пользовательские свойства. items делает копию в памяти,
+        # поэтому можно делать attrs.update
+        for format_name, format in attrs.items():
+            if isinstance(format, ImageFormat) and format_name != 'original':
+                # Если находим среди них ImageFormat.
+                attrs.update(make_properties(format_name, format))
+
+        if 'storage' in attrs:
+            attrs.setdefault('original_storage', attrs['storage'])
+
+        return super_new(cls, name, bases, attrs)
+
+
+class Wallet(object):
+    """
+    Объекты хранилищ похожи на модели в django. Для каждого набора форматов
+    нужно отнаследоваться от класса Wallet и объявить экземпляры ImageFormat
+    как его элементы.
+    """
+    __metaclass__ = WalletMetaclass
+
+
 class HashDirWallet(Wallet):
     """
     Версия, которая хранит сгенерированные картинки не рядом с оригиналом,
@@ -340,3 +347,21 @@ class HashDirWallet(Wallet):
         # Тип получается на основе расширения.
         file_type = EXTENSION.get(splitext(self.path_original)[1], None)
         return (path, file_type)
+
+
+class SingleFormatWallet(BaseWallet):
+    """
+    Специальный тип хранилища с одним форматом, который должен быть объявлен
+    как атрибут format, а его имя как format_name.
+    """
+
+    @property
+    def path(self):
+        return self._get_path(self.format_name, self.format)
+
+    @property
+    def url(self):
+        return self._get_url(self.format_name, self.format)
+
+    def load(self):
+        return self._load_format(self.format_name, self.format)

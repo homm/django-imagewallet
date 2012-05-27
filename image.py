@@ -4,6 +4,9 @@ from PIL import Image, ImageMath
 
 
 def paste_composite(original, paste):
+    """
+    Смешивает два полупрозрачных изображения.
+    """
     # this faster then split()[-1]
     image_alpha = paste._new(paste.getdata(3))
 
