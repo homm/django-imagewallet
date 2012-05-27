@@ -4,10 +4,13 @@ from django.test import TestCase
 
 from imagewallet.wallet import ImageFormat
 from imagewallet.filter_tools import size_handler
-from imagewallet.filters import resize_methods, resize
+from imagewallet.filters import resize_methods, resize, convert
+
+from PIL import Image
 
 
 class ToolsTest(TestCase):
+
     def test_size_handler(self):
         # Значение не задано
         self.assertEqual(size_handler(None)(30), None)
@@ -61,7 +64,7 @@ class ToolsTest(TestCase):
         self.assertEqual(size_handler('-66.6%')(-90), -30)
 
 
-class FiltersTest(TestCase):
+class ResizeTest(TestCase):
 
     def test_resize_method_exactly(self):
         method = resize_methods['exactly']
@@ -217,7 +220,6 @@ class FiltersTest(TestCase):
 
     def test_resize(self):
         # Создание и измнение размеров пустых картинок стоит очень дешево.
-        from PIL import Image
         f = ImageFormat()
 
         def img(*args):
@@ -278,3 +280,113 @@ class FiltersTest(TestCase):
         self.assertEqual(resizer(img(40, 40), f).size, (50, 50))
         self.assertEqual(resizer(img(50, 50), f).size, (60, 60))
         self.assertEqual(resizer(img(60, 60), f).size, (72, 72))
+
+
+class ConvertTest(TestCase):
+
+    def im(self, w=10, h=10, mode='RGB', info={}):
+        im = Image.new(mode, (w, h))
+        im.info.update(info)
+        return im
+
+    def palette_color(self, image, pixel):
+        entry = image.getpixel(pixel)
+        p = image.getpalette()
+        return p[entry * 3], p[entry * 3 + 1], p[entry * 3 + 2]
+
+    def test_convert(self):
+        f = ImageFormat()
+
+        converter = convert('RGBA')
+        self.assertEqual(converter(self.im(mode='RGB'), f).mode, 'RGBA')
+        self.assertEqual(converter(self.im(mode='LA'), f).mode, 'RGBA')
+        self.assertEqual(converter(self.im(mode='P'), f).mode, 'RGBA')
+
+        converter = convert('RgBa')
+        self.assertEqual(converter(self.im(mode='RGB'), f).mode, 'RGBA')
+        self.assertEqual(converter(self.im(mode='LA'), f).mode, 'RGBA')
+        self.assertEqual(converter(self.im(mode='P'), f).mode, 'RGBA')
+
+        # Картинка с альфаканалом для теста.
+        # Первый ряд полностью прозрачный, последний нет.
+        r3 = range(3)
+        sample = self.im(mode='LA')
+        sample.putpixel((0, 0), (0, 0))
+        sample.putpixel((1, 0), (127, 0))
+        sample.putpixel((2, 0), (255, 0))
+        sample.putpixel((0, 1), (0, 127))
+        sample.putpixel((1, 1), (127, 127))
+        sample.putpixel((2, 1), (255, 127))
+        sample.putpixel((0, 2), (0, 255))
+        sample.putpixel((1, 2), (127, 255))
+        sample.putpixel((2, 2), (255, 255))
+
+        # Полупрозрачная RGBA
+        im = convert('RGBA')(sample, f)
+        self.assertEqual([im.getpixel((i, 0)) for i in r3],
+            [(0, 0, 0, 0), (127, 127, 127, 0), (255, 255, 255, 0)])
+        self.assertEqual([im.getpixel((i, 1)) for i in r3],
+            [(0, 0, 0, 127), (127, 127, 127, 127), (255, 255, 255, 127)])
+        self.assertEqual([im.getpixel((i, 2)) for i in r3],
+            [(0, 0, 0, 255), (127, 127, 127, 255), (255, 255, 255, 255)])
+
+        # При преобразовании в RGB должно накладываться на белый фон
+        im = convert('RGB')(sample, f)
+        self.assertEqual([im.getpixel((i, 0)) for i in r3],
+            [(255, 255, 255), (255, 255, 255), (255, 255, 255)])
+        self.assertEqual([im.getpixel((i, 1)) for i in r3],
+            [(128, 128, 128), (191, 191, 191), (255, 255, 255)])
+        self.assertEqual([im.getpixel((i, 2)) for i in r3],
+            [(0, 0, 0), (127, 127, 127), (255, 255, 255)])
+
+        # При преобразовании в RGB должно накладываться на синий
+        im = convert('RGB', background='blue')(sample, f)
+        self.assertEqual([im.getpixel((i, 0)) for i in r3],
+            [(0, 0, 255), (0, 0, 255), (0, 0, 255)])
+        self.assertEqual([im.getpixel((i, 1)) for i in r3],
+            [(0, 0, 128), (63, 63, 191), (127, 127, 255)])
+        self.assertEqual([im.getpixel((i, 2)) for i in r3],
+            [(0, 0, 0), (127, 127, 127), (255, 255, 255)])
+
+        # При преобразовании в P по-умолчанию используется палитра WEB
+        im = convert('P', background='blue')(sample, f)
+        self.assertEqual([self.palette_color(im, (i, 0)) for i in r3],
+            [(0, 0, 255), (0, 0, 255), (0, 0, 255)])
+        self.assertEqual([self.palette_color(im, (i, 1)) for i in r3],
+            [(0, 0, 153), (51, 51, 204), (153, 153, 255)])
+        self.assertEqual([self.palette_color(im, (i, 2)) for i in r3],
+            [(0, 0, 0), (102, 102, 102), (255, 255, 255)])
+
+        # При преобразовании в P используем более точную палитру.
+        im = convert('P', background='blue', palette=Image.ADAPTIVE)(sample, f)
+        self.assertEqual([self.palette_color(im, (i, 0)) for i in r3],
+            [(0, 0, 255), (0, 0, 255), (0, 0, 255)])
+        self.assertEqual([self.palette_color(im, (i, 1)) for i in r3],
+            [(0, 0, 128), (63, 63, 191), (127, 127, 255)])
+        self.assertEqual([self.palette_color(im, (i, 2)) for i in r3],
+            [(0, 0, 0), (127, 127, 127), (255, 255, 255)])
+
+        # Картинка с палитрой, где 3-й элемент прозрачный.
+        sample = self.im(mode='P')
+        for i in range(4):
+            sample.putpixel((i, 0), i)
+        p = sample.getpalette()
+        p[0:9] = [10, 20, 30, 115, 117, 127, 255, 255, 255]
+        sample.putpalette(p)
+        sample.info['transparency'] = 3
+
+        im = convert('RGB', background='blue')(sample, f)
+        self.assertEqual([im.getpixel((i, 0)) for i in range(4)],
+            [(10, 20, 30), (115, 117, 127), (255, 255, 255), (0, 0, 255)])
+
+        im = convert('P', background='blue')(sample, f)
+        self.assertEqual([self.palette_color(im, (i, 0)) for i in range(4)],
+            [(10, 20, 30), (115, 117, 127), (255, 255, 255), (3, 3, 3)])
+
+        im = convert('RGBA', background='blue')(sample, f)
+        self.assertEqual([im.getpixel((i, 0)) for i in range(4)],
+            [(10, 20, 30, 255), (115, 117, 127, 255), (255, 255, 255, 255),
+                (3, 3, 3, 0)])
+
+        # Тут должен был быть тест на преобразование изображений с палитрой
+        # и полупрозрачностью в RGB, но PIL игнорирует альфу в 8-битных PNG.

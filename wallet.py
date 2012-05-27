@@ -61,7 +61,7 @@ class ImageFormat(object):
         self.decline_file_type = decline_file_type.upper()
         if self.decline_file_type not in self.file_types:
             raise ValueError("Not allowed file type: %s" % decline_file_type)
-        self.mode = mode and mode.upper()
+        self.mode = mode
         self.background = background
         self.options = options
 
@@ -72,19 +72,21 @@ class ImageFormat(object):
             for key, value in self.options.iteritems()
             if key.startswith(prefix)}
 
-    def prepare(self, image):
+    def _prepare_for_process(self, image):
         """
         Подготавливает изображение к наложению фильтров.
         """
-        options = self._get_options('mode')
-        filter = convert(self.mode, self.background, **options)
-        return filter(image, self)
+        if self.mode:
+            options = self._get_options('mode')
+            filter = convert(self.mode, self.background, **options)
+            image = filter(image, self)
+        return image
 
     def process(self, image):
         """
         Делает основную работу. Подготавливает изображение, применяет фильтры.
         """
-        image = self.prepare(image)
+        image = self._prepare_for_process(image)
 
         for filter in self.filters:
             image = filter(image, self)

@@ -156,6 +156,7 @@ def convert(mode='RGB', background='white', data=None, dither=None,
     Преобразует изображение в заданный режим. Если необходимо, заливает фон.
     """
     background = ImageColor.getrgb(background)
+    mode = mode.upper()
 
     def run(image, format):
         # Преобразования не требуется
