@@ -176,7 +176,7 @@ class OriginalImageFormat(ImageFormat):
     del _extension, _file_type
 
 
-class BaseWallet():
+class BaseWallet(object):
     storage = default_storage
     original_storage = default_storage
 
@@ -320,7 +320,7 @@ class WalletMetaclass(type):
         return super_new(cls, name, bases, attrs)
 
 
-class Wallet(object):
+class Wallet(BaseWallet):
     """
     Объекты хранилищ похожи на модели в django. Для каждого набора форматов
     нужно отнаследоваться от класса Wallet и объявить экземпляры ImageFormat
