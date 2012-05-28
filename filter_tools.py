@@ -11,6 +11,10 @@ def size_handler(size):
         # None — специальное значение, параметр не задан.
         return lambda original: None
 
+    if callable(size):
+        # Size может быть и callback, который сам вернет нужный размер.
+        return size
+
     try:
         # пробуем преобразовать в число
         size = int(size)

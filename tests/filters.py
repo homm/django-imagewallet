@@ -4,7 +4,7 @@ from django.test import TestCase
 
 from imagewallet.wallet import ImageFormat
 from imagewallet.filter_tools import size_handler
-from imagewallet.filters import resize_methods, resize, convert
+from imagewallet.filters import resize_methods, resize, convert, crop
 
 from PIL import Image
 
@@ -16,9 +16,16 @@ class ToolsTest(TestCase):
         self.assertEqual(size_handler(None)(30), None)
         self.assertEqual(size_handler(None)(-100), None)
 
+        # Собственная функция
+        size = lambda x: x // 2 + 10
+        self.assertEqual(size_handler(size)(30), 25)
+        self.assertEqual(size_handler(size)(-100), -40)
+
         # Значение простое число
         self.assertEqual(size_handler(200)(30), 200)
         self.assertEqual(size_handler(200)(-100), 200)
+        self.assertEqual(size_handler(-200)(30), -200)
+        self.assertEqual(size_handler(-200)(-100), -200)
 
         # Значение — строка с числом
         self.assertEqual(size_handler('200')(30), 200)
@@ -219,7 +226,6 @@ class ResizeTest(TestCase):
         self.assertEqual(method(300, 300, 195, 200), (296, 304))
 
     def test_resize(self):
-        # Создание и измнение размеров пустых картинок стоит очень дешево.
         f = ImageFormat()
 
         def img(*args):
@@ -280,6 +286,70 @@ class ResizeTest(TestCase):
         self.assertEqual(resizer(img(40, 40), f).size, (50, 50))
         self.assertEqual(resizer(img(50, 50), f).size, (60, 60))
         self.assertEqual(resizer(img(60, 60), f).size, (72, 72))
+
+
+class CropTest(TestCase):
+
+    def im(self, w=16, h=16, info={}):
+        im = Image.new('L', (w, h))
+        im.info.update(info)
+
+        s = w * h
+        data = im.load()
+        for j in range(h):
+            for i in range(w):
+                data[i, j] = 256 * (i + j * w) // s
+        return im
+
+    def test_crop(self):
+        f = ImageFormat()
+
+        cropper = crop()
+        self.assertEquals(cropper(self.im(40, 33), f).size, (40, 33))
+
+        sample = self.im(16, 16)
+
+        im = crop(width=12)(sample, f)
+        self.assertEquals(im.size, (12, 16))
+        self.assertEquals(im.getpixel((0, 0)), 2)
+        self.assertEquals(im.getpixel((11, 15)), 253)
+
+        im = crop(height=12)(sample, f)
+        self.assertEquals(im.size, (16, 12))
+        self.assertEquals(im.getpixel((0, 0)), 32)
+        self.assertEquals(im.getpixel((15, 11)), 223)
+
+        im = crop(12, 12)(sample, f)
+        self.assertEquals(im.size, (12, 12))
+        self.assertEquals(im.getpixel((0, 0)), 34)
+        self.assertEquals(im.getpixel((11, 11)), 221)
+
+        im = crop('-4px', 12, halign=0, valign=0)(sample, f)
+        self.assertEquals(im.size, (12, 12))
+        self.assertEquals(im.getpixel((0, 0)), 0)
+        self.assertEquals(im.getpixel((11, 11)), 187)
+
+        im = crop(12, '-4px', halign='100%', valign='100%')(sample, f)
+        self.assertEquals(im.size, (12, 12))
+        self.assertEquals(im.getpixel((0, 0)), 68)
+        self.assertEquals(im.getpixel((11, 11)), 255)
+
+        im = crop('75%', 12, halign=-3, valign=-1)(sample, f)
+        self.assertEquals(im.size, (12, 12))
+        self.assertEquals(im.getpixel((0, 0)), 19)
+        self.assertEquals(im.getpixel((11, 11)), 206)
+
+        im = crop(12, '75%', halign='+3px', valign='+1px')(sample, f)
+        self.assertEquals(im.size, (12, 12))
+        self.assertEquals(im.getpixel((0, 0)), 49)
+        self.assertEquals(im.getpixel((11, 11)), 236)
+
+        im = crop(12, '125%', background=99)(sample, f)
+        self.assertEquals(im.size, (12, 20))
+        self.assertEquals(im.getpixel((0, 0)), 99)
+        self.assertEquals(im.getpixel((0, 2)), 2)
+        self.assertEquals(im.getpixel((11, 17)), 253)
+        self.assertEquals(im.getpixel((11, 19)), 99)
 
 
 class ConvertTest(TestCase):
