@@ -351,6 +351,16 @@ class CropTest(TestCase):
         self.assertEquals(im.getpixel((11, 17)), 253)
         self.assertEquals(im.getpixel((11, 19)), 99)
 
+        # на 2 пикселя выше середины
+        middle_2px = lambda x: x and x // 2 - 2
+
+        im = crop('+10px', '150%', valign=middle_2px, background=99)(sample, f)
+        self.assertEquals(im.size, (26, 24))
+        self.assertEquals(im.getpixel((0, 0)), 99)
+        self.assertEquals(im.getpixel((5, 2)), 0)
+        self.assertEquals(im.getpixel((20, 17)), 255)
+        self.assertEquals(im.getpixel((25, 23)), 99)
+
 
 class ConvertTest(TestCase):
 
