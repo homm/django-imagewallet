@@ -8,7 +8,8 @@ from django.core.files.storage import default_storage
 
 from PIL import Image
 from imagewallet.tests.storage import DictStorage
-from imagewallet.wallet import ImageFormat, OriginalImageFormat
+from imagewallet.wallet import (ImageFormat, OriginalImageFormat,
+    SingleFormatWallet)
 from imagewallet.wallet import Wallet, HashDirWallet
 
 
@@ -180,6 +181,15 @@ class WalletMetaclassTest(TestCase):
         with self.assertRaises(KeyError):
             TW.__dict__['url_original']
         self.assertEqual(TW.load_original, Wallet.load_original)
+
+        TW = type('TW', (SingleFormatWallet,), {
+            'format': ImageFormat(),
+            'format_name': 'small',
+            'storage': DictStorage(),
+        })
+        self.assertEqual(type(TW.storage), DictStorage)
+        self.assertEqual(type(TW.original_storage), DictStorage)
+        self.assertEqual(TW.storage, TW.original_storage)
 
 
 class WalletTest(TestCase):

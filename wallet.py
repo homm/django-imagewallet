@@ -178,7 +178,24 @@ class OriginalImageFormat(ImageFormat):
     del _extension, _file_type
 
 
+class BaseWalletMetaclass(type):
+
+    def __new__(cls, name, bases, attrs):
+        super_new = super(BaseWalletMetaclass, cls).__new__
+
+        if 'storage' in attrs and 'original_storage' not in attrs:
+            attrs['original_storage'] = attrs['storage']
+
+        return super_new(cls, name, bases, attrs)
+
+
 class BaseWallet(object):
+    """
+    Базовый тип для хранилищ.
+    """
+
+    __metaclass__ = BaseWalletMetaclass
+
     storage = default_storage
     original_storage = default_storage
 
@@ -291,7 +308,7 @@ class BaseWallet(object):
             storage, file_path)
 
 
-class WalletMetaclass(type):
+class WalletMetaclass(BaseWalletMetaclass):
     """
     Управляет созданием хранилищь. Для кажого объявленногофвормата создает
     свойства path_<format> и url_<format>, а так же метод load_<format>.
@@ -315,9 +332,6 @@ class WalletMetaclass(type):
             if isinstance(format, ImageFormat) and format_name != 'original':
                 # Если находим среди них ImageFormat.
                 attrs.update(make_properties(format_name, format))
-
-        if 'storage' in attrs:
-            attrs.setdefault('original_storage', attrs['storage'])
 
         return super_new(cls, name, bases, attrs)
 
