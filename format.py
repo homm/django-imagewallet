@@ -5,6 +5,8 @@ from PIL.Image import EXTENSION, SAVE
 from imagewallet.filters import convert
 
 
+__all__ = ['ImageFormat', 'OriginalImageFormat']
+
 # Загружаем все доступный кодеки. Нужно для досупа к EXTENSION
 Image.init()
 # max block size for jpeg save in PIL
@@ -18,7 +20,7 @@ class ImageFormat(object):
     """
 
     file_type = None
-    # Если исходного типа файла нет в file_types, именно эот тип будет выбран.
+    # Если исходного типа файла нет в file_types, именно этот тип будет выбран.
     # PNG сохраняет во многих режимах и без потери качества.
     decline_file_type = 'PNG'
     file_types = {

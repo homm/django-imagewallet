@@ -13,6 +13,9 @@ from imagewallet.format import OriginalImageFormat
 from imagewallet.wallet import Wallet
 
 
+__all__ = ['FieldWallet', 'WalletField']
+
+
 class FieldWallet(Wallet):
     """
     Специальная версия хранилища, использующаяся в поле WalletField.

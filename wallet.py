@@ -12,6 +12,9 @@ from PIL.Image import EXTENSION
 from format import ImageFormat
 
 
+__all__ = ['Wallet', 'HashDirWallet', 'SingleFormatWallet']
+
+
 class BaseWalletMetaclass(type):
 
     def __new__(cls, name, bases, attrs):
@@ -27,7 +30,6 @@ class BaseWallet(object):
     """
     Базовый тип для хранилищ.
     """
-
     __metaclass__ = BaseWalletMetaclass
 
     storage = default_storage
@@ -184,7 +186,6 @@ class HashDirWallet(Wallet):
     Версия, которая хранит сгенерированные картинки не рядом с оригиналом,
     а в отдельной папке и именем как хэш.
     """
-
     file_path_prefix = 'walletcache/'
 
     @cached_property

@@ -8,8 +8,8 @@ from django.core.files.storage import default_storage
 
 from PIL import Image
 from imagewallet.tests.storage import DictStorage
-from imagewallet.format import OriginalImageFormat
-from imagewallet.wallet import ImageFormat, SingleFormatWallet
+from imagewallet.format import ImageFormat, OriginalImageFormat
+from imagewallet.wallet import SingleFormatWallet
 from imagewallet.wallet import Wallet, HashDirWallet
 
 
