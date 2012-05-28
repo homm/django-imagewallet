@@ -9,7 +9,8 @@ from django.db.models.fields.files import FileField
 from django.utils.encoding import force_unicode
 
 import PIL
-from imagewallet.wallet import Wallet, OriginalImageFormat
+from imagewallet.format import OriginalImageFormat
+from imagewallet.wallet import Wallet
 
 
 class FieldWallet(Wallet):
