@@ -65,8 +65,8 @@ class BaseWallet(object):
         return self.path_original
 
     def __repr__(self, *args, **kwargs):
-        class_ = type(self).__name__
-        return u"<%s '%s' at %s>" % (class_, self.path_original, id(self))
+        cls = type(self).__name__
+        return u"<%s '%s' at %s>" % (cls, self.path_original, id(self))
 
     @cached_property
     def _path_info(self):
@@ -153,21 +153,29 @@ class WalletMetaclass(BaseWalletMetaclass):
     def __new__(cls, name, bases, attrs):
         super_new = super(WalletMetaclass, cls).__new__
 
-        # Одно замыкание на все три функции.
-        def make_properties(name, format):
-            get_path = lambda self: Wallet._get_path(self, name, format)
-            get_url = lambda self: Wallet._get_url(self, name, format)
-            load_format = lambda self: Wallet._load_format(self, name, format)
-            return {'path_' + name: property(get_path),
-                'url_' + name: property(get_url),
-                'load_' + name: load_format}
+        def defaults(func, *defaults):
+            """
+            Создает копию функции, принимающую другие параметры по-умолчанию.
+            Похоже на functools.partial, но параметр применяются с конца.
+            """
+            func = type(func)(func.func_code, func.func_globals)
+            func.__defaults__ = defaults
+            return func
 
         # Итерируем пользовательские свойства. items делает копию в памяти,
         # поэтому можно делать attrs.update
         for format_name, format in attrs.items():
+            # Если находим среди них ImageFormat.
             if isinstance(format, ImageFormat) and format_name != 'original':
-                # Если находим среди них ImageFormat.
-                attrs.update(make_properties(format_name, format))
+                # Тут небольшой хак: Создается копия каждой функци
+                # с оригинальным кодом, но другими параметрами по-умолчанию.
+                # Это позволяет избежать замыкания, поэтому работает быстрее.
+                attrs['path_' + format_name] = property(defaults(
+                    BaseWallet._get_path.im_func, format_name, format))
+                attrs['url_' + format_name] = property(defaults(
+                    BaseWallet._get_url.im_func, format_name, format))
+                attrs['load_' + format_name] = defaults(
+                    BaseWallet._load_format.im_func, format_name, format)
 
         return super_new(cls, name, bases, attrs)
 
