@@ -7,6 +7,12 @@ from django.core.files.storage import Storage
 from django.utils.encoding import filepath_to_uri
 
 
+class ForeverStringIO(StringIO.StringIO):
+
+    def close(self):
+        self.seek(0)
+
+
 class DictStorage(Storage):
 
     def __init__(self, base_url=None):
@@ -15,15 +21,16 @@ class DictStorage(Storage):
 
     def _open(self, name, mode='rb'):
         if name not in self.storage:
-            self.storage[name] = StringIO.StringIO()
+            self.storage[name] = ForeverStringIO()
         self.storage[name].seek(0)
         return self.storage[name]
 
     def _save(self, name, content):
         if name in self.storage:
             del self.storage[name]
-        file = self.storage[name] = StringIO.StringIO()
+        file = self.storage[name] = ForeverStringIO()
         file.write(content.read())
+        return name
 
     def delete(self, name):
         if name in self.storage:
