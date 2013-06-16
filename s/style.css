@@ -1,0 +1,16 @@
+html,
+body {
+	padding: 0;
+	margin: 0;
+}
+
+body {
+	font-family: "Calibri", "Trebuchet MS";
+	font-size: 16px;
+	line-height: 1.4;
+}
+
+#content {
+	width: 640px;
+	margin: 50px auto 100px;
+}
